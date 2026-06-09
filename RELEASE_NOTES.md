@@ -65,6 +65,12 @@ Hotfix `0.0.1-r10`:
 - refreshes the LuCI speed-test page with a more minimal Yandex Internetometer-like dark layout and smoother gauge/status animations;
 - keeps project version `0.0.1`, package release is `r10`.
 
+Hotfix `0.0.1-r11`:
+
+- replaces the generic circular gauge with a Yandex Internetometer-like oval tick scale;
+- shows download, upload, and latency as three large centered metrics inside the scale;
+- keeps project version `0.0.1`, package release is `r11`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
