@@ -11,7 +11,7 @@ permissions:
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PKG_VERSION: 0.0.1-r1
+  PKG_VERSION: 0.0.1-r2
 
 jobs:
   build:
@@ -61,6 +61,8 @@ jobs:
           cat > "$WORK/control/conffiles" <<EOF
           /etc/config/yandex-internetometer
           EOF
+          install -m 0755 scripts/post-install "$WORK/control/postinst"
+          install -m 0755 scripts/post-deinstall "$WORK/control/postrm"
           printf '2.0\n' > "$WORK/debian-binary"
           tar --numeric-owner --owner=0 --group=0 -czf "$WORK/data.tar.gz" -C "$PKGROOT" .
           tar --numeric-owner --owner=0 --group=0 -czf "$WORK/control.tar.gz" -C "$WORK/control" .
@@ -145,6 +147,9 @@ jobs:
               --info "maintainer:Sergey Lopukhov" \
               --info "description:LuCI app for unofficial Yandex Internetometer-compatible speed tests" \
               --info "depends:libc curl jq" \
+              --script "post-install:$GITHUB_WORKSPACE/scripts/post-install" \
+              --script "post-upgrade:$GITHUB_WORKSPACE/scripts/post-install" \
+              --script "post-deinstall:$GITHUB_WORKSPACE/scripts/post-deinstall" \
               --files "$PKGROOT" \
               --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk"
           done
@@ -156,7 +161,7 @@ jobs:
           for arch in $ARCHES; do
             dir="$REPO/$arch/yandex-internetometer"
             mkdir -p "$dir"
-            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk" "$dir/luci-app-yandex-internetometer-0.0.1-r1.apk"
+            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk" "$dir/luci-app-yandex-internetometer-$PKG_VERSION.apk"
             (
               cd "$dir"
               "$SDK/staging_dir/host/bin/apk" mkndx \

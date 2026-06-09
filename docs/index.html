@@ -139,10 +139,14 @@ echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/$
 apk update
 apk add luci-app-yandex-internetometer</code></pre>
 
-		<p>Если раньше установка падала с <code>ADB integrity error</code>, перезапишите ключ и список репозитория, затем очистите локальный cache:</p>
+		<p>Если уже была установлена старая тестовая сборка:</p>
 		<pre><code>rm -f /var/cache/apk/*
 apk update
-apk add luci-app-yandex-internetometer</code></pre>
+apk upgrade luci-app-yandex-internetometer</code></pre>
+
+		<p>Если пункт меню не появился сразу:</p>
+		<pre><code>rm -f /tmp/luci-indexcache.*
+/etc/init.d/rpcd reload 2&gt;/dev/null || /etc/init.d/rpcd restart</code></pre>
 
 		<p>Для OpenWrt 24.10.x с legacy <code>opkg</code>:</p>
 		<pre><code>cd /tmp

@@ -34,7 +34,7 @@ apk add luci-app-yandex-internetometer
 ```sh
 rm -f /var/cache/apk/*
 apk update
-apk add luci-app-yandex-internetometer
+apk upgrade luci-app-yandex-internetometer
 ```
 
 Для OpenWrt 24.10.x с legacy `opkg` используйте `.ipk`:
@@ -132,6 +132,14 @@ echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/$
 
 apk update
 apk add luci-app-yandex-internetometer
+```
+
+Upgrade after an earlier test build:
+
+```sh
+rm -f /var/cache/apk/*
+apk update
+apk upgrade luci-app-yandex-internetometer
 ```
 
 For OpenWrt 24.10.x legacy opkg:
@@ -241,6 +249,17 @@ Router CPU too weak: reduce stream count, download duration, upload duration, or
 Result is lower than expected: router CPU, NAT offload settings, Wi-Fi, VPN, SQM, and concurrent traffic can limit measured speed.
 
 Yandex endpoint changed: the backend returns an error such as `Yandex probe response has an unsupported structure`. Update the parser/endpoints.
+
+`jq was compiled without ONIGURUMA regex library`: upgrade to `0.0.1-r2` or newer. The backend no longer uses jq regex functions.
+
+LuCI menu item is missing after install: upgrade to `0.0.1-r2` or newer. The package clears LuCI menu cache after installation. For an already installed old build, run:
+
+```sh
+rm -f /tmp/luci-indexcache.*
+/etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart
+```
+
+Then refresh LuCI or log out and log in again.
 
 `ADB integrity error` during `apk add`: refresh the package key and clear the local apk cache:
 

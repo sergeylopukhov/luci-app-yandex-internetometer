@@ -1,10 +1,17 @@
 # Manual testing
 
 1. Build the package with an apk-based OpenWrt SDK/buildroot.
-2. Install it on the router:
+2. Install it on the router from the APK repository:
 
 ```sh
-apk add --allow-untrusted ./luci-app-yandex-internetometer-*.apk
+curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
+ARCH="$(apk --print-arch)"
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" > \
+  /etc/apk/repositories.d/yandex-internetometer.list
+rm -f /var/cache/apk/*
+apk update
+apk add luci-app-yandex-internetometer
 ```
 
 3. Confirm CLI JSON output:
@@ -13,10 +20,23 @@ apk add --allow-untrusted ./luci-app-yandex-internetometer-*.apk
 yandex-internetometer run --json
 ```
 
+Confirm there is no jq regex error such as:
+
+```text
+jq was compiled without ONIGURUMA regex library
+```
+
 4. Confirm the LuCI menu item appears under:
 
 ```text
 Status -> Yandex Internetometer
+```
+
+If it does not appear immediately, clear LuCI cache and reload rpcd:
+
+```sh
+rm -f /tmp/luci-indexcache.*
+/etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart
 ```
 
 5. Start a test from LuCI and confirm the running indicator appears.

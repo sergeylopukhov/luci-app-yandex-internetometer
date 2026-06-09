@@ -59,6 +59,13 @@ debug_log() {
 	printf '%s %s\n' "$(timestamp)" "$*" >> "$LOG_FILE"
 }
 
+json_uint_or_default() {
+	case "$1" in
+		''|*[!0-9]*) printf '%s' "$2" ;;
+		*) printf '%s' "$1" ;;
+	esac
+}
+
 json_result() {
 	ok="$1"
 	running="$2"
@@ -70,6 +77,11 @@ json_result() {
 	server="$8"
 	error="$9"
 
+	json_streams="$(json_uint_or_default "$STREAMS" 3)"
+	json_download_time="$(json_uint_or_default "$DOWNLOAD_TIME" 10)"
+	json_upload_time="$(json_uint_or_default "$UPLOAD_TIME" 10)"
+	json_probe_count="$(json_uint_or_default "$probe_count" 0)"
+
 	jq -cn \
 		--argjson ok "$ok" \
 		--argjson running "$running" \
@@ -78,14 +90,13 @@ json_result() {
 		--arg upload "$upload" \
 		--arg ping "$ping" \
 		--arg jitter "$jitter" \
-		--arg streams "$STREAMS" \
-		--arg download_time "$DOWNLOAD_TIME" \
-		--arg upload_time "$UPLOAD_TIME" \
-		--arg probe_count "$probe_count" \
+		--argjson streams "$json_streams" \
+		--argjson download_time "$json_download_time" \
+		--argjson upload_time "$json_upload_time" \
+		--argjson probe_count "$json_probe_count" \
 		--arg server "$server" \
 		--arg error "$error" '
-		def num_or_null($v): if $v == "" or $v == "null" then null else ($v | tonumber) end;
-		def int_or_default($v; $d): if $v | test("^[0-9]+$") then ($v | tonumber) else $d end;
+		def num_or_null($v): if $v == "" or $v == "null" then null else (try ($v | tonumber) catch null) end;
 		{
 			ok: $ok,
 			running: $running,
@@ -94,10 +105,10 @@ json_result() {
 			upload_mbps: num_or_null($upload),
 			ping_ms: num_or_null($ping),
 			jitter_ms: num_or_null($jitter),
-			streams: int_or_default($streams; 3),
-			download_time: int_or_default($download_time; 10),
-			upload_time: int_or_default($upload_time; 10),
-			probe_count: int_or_default($probe_count; 0),
+			streams: $streams,
+			download_time: $download_time,
+			upload_time: $upload_time,
+			probe_count: $probe_count,
 			server: (if $server == "" or $server == "null" then null else $server end),
 			error: (if $error == "" or $error == "null" then null else $error end)
 		}'
@@ -223,11 +234,11 @@ latency_urls() {
 }
 
 download_urls() {
-	jq -r '.download.probes[]?.url | select(test("/probes/50mb"))' "$PROBES_FILE" 2>/dev/null
+	jq -r '.download.probes[]?.url | select(contains("/probes/50mb"))' "$PROBES_FILE" 2>/dev/null
 }
 
 upload_urls() {
-	jq -r '.upload.probes[]?.url | select(test("size=30720"))' "$PROBES_FILE" 2>/dev/null
+	jq -r '.upload.probes[]?.url | select(contains("size=30720"))' "$PROBES_FILE" 2>/dev/null
 }
 
 measure_latency() {
