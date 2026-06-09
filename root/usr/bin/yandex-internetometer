@@ -11,13 +11,14 @@ GET_PROBES_URL="https://yandex.ru/internet/api/v0/get-probes"
 REFERER="https://yandex.ru/internet/"
 USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
 
-STREAMS="3"
+STREAMS="8"
 DOWNLOAD_TIME="10"
 UPLOAD_TIME="10"
 UPLOAD_SIZE="12000000"
 UPLOAD_ENABLED="1"
 DEBUG="0"
 JSON_MODE="0"
+PROGRESS_PHASE=""
 
 usage() {
 	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1]"
@@ -77,16 +78,18 @@ json_result() {
 	server="$8"
 	error="$9"
 
-	json_streams="$(json_uint_or_default "$STREAMS" 3)"
+	json_streams="$(json_uint_or_default "$STREAMS" 8)"
 	json_download_time="$(json_uint_or_default "$DOWNLOAD_TIME" 10)"
 	json_upload_time="$(json_uint_or_default "$UPLOAD_TIME" 10)"
 	json_upload_enabled="$(json_uint_or_default "$UPLOAD_ENABLED" 1)"
 	json_probe_count="$(json_uint_or_default "$probe_count" 0)"
+	json_phase="$PROGRESS_PHASE"
 
 	jq -cn \
 		--argjson ok "$ok" \
 		--argjson running "$running" \
 		--arg timestamp "$(timestamp)" \
+		--arg phase "$json_phase" \
 		--arg download "$download" \
 		--arg upload "$upload" \
 		--arg ping "$ping" \
@@ -103,6 +106,7 @@ json_result() {
 			ok: $ok,
 			running: $running,
 			timestamp: $timestamp,
+			phase: (if $phase == "" or $phase == "null" then null else $phase end),
 			download_mbps: num_or_null($download),
 			upload_mbps: num_or_null($upload),
 			ping_ms: num_or_null($ping),
@@ -115,6 +119,21 @@ json_result() {
 			server: (if $server == "" or $server == "null" then null else $server end),
 			error: (if $error == "" or $error == "null" then null else $error end)
 		}'
+}
+
+write_progress() {
+	PROGRESS_PHASE="$1"
+	running="$2"
+	download="$3"
+	upload="$4"
+	ping="$5"
+	jitter="$6"
+	probe_count="$7"
+	server="$8"
+	error="$9"
+
+	json_result true "$running" "$download" "$upload" "$ping" "$jitter" "$probe_count" "$server" "$error" > "$RESULT_FILE.progress" &&
+		mv "$RESULT_FILE.progress" "$RESULT_FILE"
 }
 
 fail() {
@@ -246,8 +265,10 @@ upload_urls() {
 
 measure_latency() {
 	out="$1"
+	probes="$2"
+	server="$3"
 	: > "$out"
-	count="0"
+	write_progress "ping" true null null null null "$probes" "$server" null
 
 	latency_urls | while IFS= read -r url; do
 		[ -n "$url" ] || continue
@@ -260,8 +281,11 @@ measure_latency() {
 				-H "User-Agent: $USER_AGENT" \
 				-w '%{time_total}\n' \
 				"$url" 2>>"$LOG_FILE" >> "$out" || true
+			if [ -s "$out" ]; then
+				set -- $(latency_stats "$out")
+				write_progress "ping" true null null "$1" "$2" "$probes" "$server" null
+			fi
 			i=$((i + 1))
-			count=$((count + 1))
 		done
 	done
 
@@ -271,9 +295,15 @@ measure_latency() {
 measure_download() {
 	out="$1"
 	urls="$2"
+	probes="$3"
+	server="$4"
+	ping="$5"
+	jitter="$6"
 	: > "$out"
-	end_time=$(( $(date +%s) + DOWNLOAD_TIME ))
+	start_time="$(date +%s)"
+	end_time=$(( start_time + DOWNLOAD_TIME ))
 	i="1"
+	write_progress "download" true null null "$ping" "$jitter" "$probes" "$server" null
 
 	while [ "$i" -le "$STREAMS" ]; do
 		(
@@ -283,7 +313,7 @@ measure_download() {
 				[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
 				curl -fsS -o /dev/null \
 					--connect-timeout 5 \
-					--max-time "$DOWNLOAD_TIME" \
+					--max-time 2 \
 					-H "Referer: $REFERER" \
 					-H "User-Agent: $USER_AGENT" \
 					-w '%{size_download}\n' \
@@ -293,17 +323,36 @@ measure_download() {
 		) &
 		i=$((i + 1))
 	done
+
+	while [ "$(date +%s)" -lt "$end_time" ]; do
+		sleep 1
+		now="$(date +%s)"
+		elapsed=$(( now - start_time ))
+		[ "$elapsed" -gt 0 ] || elapsed="1"
+		bytes="$(sum_file "$out")"
+		mbps="$(mbps_from_bytes "$bytes" "$elapsed")"
+		write_progress "download" true "$mbps" null "$ping" "$jitter" "$probes" "$server" null
+	done
+
 	wait
 
-	[ -s "$out" ] || fail "Unable to measure download speed"
+	bytes="$(sum_file "$out")"
+	[ "$bytes" -gt 0 ] || fail "Unable to measure download speed"
 }
 
 measure_upload() {
 	out="$1"
 	urls="$2"
+	probes="$3"
+	server="$4"
+	ping="$5"
+	jitter="$6"
+	download="$7"
 	: > "$out"
-	end_time=$(( $(date +%s) + UPLOAD_TIME ))
+	start_time="$(date +%s)"
+	end_time=$(( start_time + UPLOAD_TIME ))
 	i="1"
+	write_progress "upload" true "$download" null "$ping" "$jitter" "$probes" "$server" null
 
 	while [ "$i" -le "$STREAMS" ]; do
 		(
@@ -313,7 +362,7 @@ measure_upload() {
 				[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
 				head -c "$UPLOAD_SIZE" /dev/zero | curl -fsS -o /dev/null \
 					--connect-timeout 5 \
-					--max-time "$UPLOAD_TIME" \
+					--max-time 2 \
 					-H "Referer: $REFERER" \
 					-H "User-Agent: $USER_AGENT" \
 					-H "Content-Type: application/octet-stream" \
@@ -325,9 +374,21 @@ measure_upload() {
 		) &
 		i=$((i + 1))
 	done
+
+	while [ "$(date +%s)" -lt "$end_time" ]; do
+		sleep 1
+		now="$(date +%s)"
+		elapsed=$(( now - start_time ))
+		[ "$elapsed" -gt 0 ] || elapsed="1"
+		bytes="$(sum_file "$out")"
+		mbps="$(mbps_from_bytes "$bytes" "$elapsed")"
+		write_progress "upload" true "$download" "$mbps" "$ping" "$jitter" "$probes" "$server" null
+	done
+
 	wait
 
-	[ -s "$out" ] || fail "Unable to measure upload speed"
+	bytes="$(sum_file "$out")"
+	[ "$bytes" -gt 0 ] || fail "Unable to measure upload speed"
 }
 
 sum_file() {
@@ -381,11 +442,13 @@ run_test() {
 
 	: > "$LOG_FILE"
 	debug_log "starting test streams=$STREAMS download_time=$DOWNLOAD_TIME upload_time=$UPLOAD_TIME upload_size=$UPLOAD_SIZE upload_enabled=$UPLOAD_ENABLED"
+	write_progress "prepare" true null null null null 0 null null
 	fetch_probes
 
 	probes="$(probe_count)"
 	server="$(server_name)"
 	[ -n "$server" ] || server="Yandex CDN"
+	write_progress "prepare" true null null null null "$probes" "$server" null
 
 	download_urls > "$tmpdir/download.urls"
 	upload_urls > "$tmpdir/upload.urls"
@@ -394,23 +457,25 @@ run_test() {
 		[ -s "$tmpdir/upload.urls" ] || fail "No Yandex upload probes are available"
 	fi
 
-	measure_latency "$tmpdir/latency.txt"
+	measure_latency "$tmpdir/latency.txt" "$probes" "$server"
 	set -- $(latency_stats "$tmpdir/latency.txt")
 	ping_ms="$1"
 	jitter_ms="$2"
 
-	measure_download "$tmpdir/download.txt" "$tmpdir/download.urls"
+	measure_download "$tmpdir/download.txt" "$tmpdir/download.urls" "$probes" "$server" "$ping_ms" "$jitter_ms"
 	download_bytes="$(sum_file "$tmpdir/download.txt")"
 	download_mbps="$(mbps_from_bytes "$download_bytes" "$DOWNLOAD_TIME")"
+	write_progress "download" true "$download_mbps" null "$ping_ms" "$jitter_ms" "$probes" "$server" null
 
 	if [ "$UPLOAD_ENABLED" = "1" ]; then
-		measure_upload "$tmpdir/upload.txt" "$tmpdir/upload.urls"
+		measure_upload "$tmpdir/upload.txt" "$tmpdir/upload.urls" "$probes" "$server" "$ping_ms" "$jitter_ms" "$download_mbps"
 		upload_bytes="$(sum_file "$tmpdir/upload.txt")"
 		upload_mbps="$(mbps_from_bytes "$upload_bytes" "$UPLOAD_TIME")"
 	else
 		upload_mbps="null"
 	fi
 
+	PROGRESS_PHASE="complete"
 	json="$(json_result true false "$download_mbps" "$upload_mbps" "$ping_ms" "$jitter_ms" "$probes" "$server" null)"
 	printf '%s\n' "$json" > "$RESULT_FILE"
 
@@ -433,6 +498,7 @@ start_test() {
 	fi
 
 	rm -rf "$LOCK_DIR"
+	PROGRESS_PHASE="prepare"
 	json_result true true null null null null 0 null null > "$RESULT_FILE"
 	(
 		"$SELF" run --json > "$RESULT_FILE.tmp" 2>>"$LOG_FILE"

@@ -32,6 +32,7 @@ var translations = {
 		'Measuring upload speed': 'Измерение исходящей скорости',
 		'Not available': 'Нет данных',
 		'Ping': 'Пинг',
+		'Preparing test': 'Подготовка теста',
 		'Probe servers': 'Probe-серверы',
 		'Ready': 'Готов',
 		'Ready to test': 'Готов к тесту',
@@ -119,6 +120,7 @@ function statusCall(command) {
 			upload_mbps: null,
 			ping_ms: null,
 			jitter_ms: null,
+			phase: null,
 			streams: null,
 			download_time: null,
 			upload_time: null,
@@ -128,13 +130,6 @@ function statusCall(command) {
 			error: err ? String(err) : T('Unable to execute backend command')
 		};
 	});
-}
-
-function card(title, value) {
-	return E('div', { 'class': 'cbi-section yandex-internetometer-card' }, [
-		E('div', { 'class': 'yandex-internetometer-card-title' }, title),
-		E('div', { 'class': 'yandex-internetometer-card-value' }, value)
-	]);
 }
 
 function numericValue(value, fallback) {
@@ -157,24 +152,10 @@ function runningElapsed(data) {
 	return Math.max(0, Math.floor((Date.now() - started) / 1000));
 }
 
-function runningEstimate(data) {
-	var downloadTime = numericValue(data ? data.download_time : null, 10);
-	var uploadTime = data && Number(data.upload_enabled) === 0 ? 0 : numericValue(data ? data.upload_time : null, 10);
-
-	return 5 + downloadTime + uploadTime + 2;
-}
-
-function runningPercent(data) {
-	var elapsed = runningElapsed(data);
-	var estimate = runningEstimate(data);
-
-	if (estimate <= 0)
-		return 0;
-
-	return Math.min(98, Math.round((elapsed / estimate) * 100));
-}
-
 function runningPhaseCode(data, elapsed) {
+	if (data && data.phase)
+		return data.phase;
+
 	var downloadTime = numericValue(data ? data.download_time : null, 10);
 	var uploadTime = data && Number(data.upload_enabled) === 0 ? 0 : numericValue(data ? data.upload_time : null, 10);
 
@@ -191,6 +172,21 @@ function runningPhaseCode(data, elapsed) {
 }
 
 function runningPhase(data, elapsed) {
+	if (data && data.phase === 'prepare')
+		return T('Preparing test');
+
+	if (data && data.phase === 'ping')
+		return T('Checking latency');
+
+	if (data && data.phase === 'download')
+		return T('Measuring download speed');
+
+	if (data && data.phase === 'upload')
+		return T('Measuring upload speed');
+
+	if (data && data.phase === 'complete')
+		return T('Complete');
+
 	var downloadTime = numericValue(data ? data.download_time : null, 10);
 	var uploadTime = data && Number(data.upload_enabled) === 0 ? 0 : numericValue(data ? data.upload_time : null, 10);
 
@@ -206,14 +202,69 @@ function runningPhase(data, elapsed) {
 	return T('Finishing the test');
 }
 
-function gaugeProgress(data) {
+function activePhase(data) {
+	if (data && data.phase)
+		return data.phase;
+
 	if (data && data.running)
-		return runningPercent(data);
+		return runningPhaseCode(data, runningElapsed(data));
 
-	if (data && hasValue(data.download_mbps))
-		return Math.min(100, Math.round(parseFloat(data.download_mbps) / 10));
+	if (hasResult(data))
+		return 'complete';
 
-	return 0;
+	return 'ready';
+}
+
+function activeMetric(data) {
+	var phase = activePhase(data);
+
+	if (phase === 'ping' || phase === 'prepare') {
+		return {
+			label: T('Ping'),
+			value: hasValue(data.ping_ms) ? metricNumber(data.ping_ms) : '--',
+			unit: T('ms')
+		};
+	}
+
+	if (phase === 'upload') {
+		return {
+			label: T('Upload speed'),
+			value: hasValue(data.upload_mbps) ? metricNumber(data.upload_mbps) : '--',
+			unit: T('Mbps')
+		};
+	}
+
+	return {
+		label: T('Download speed'),
+		value: hasValue(data.download_mbps) ? metricNumber(data.download_mbps) : '--',
+		unit: hasValue(data.download_mbps) || data.running ? T('Mbps') : ''
+	};
+}
+
+function gaugeProgress(data) {
+	var phase = activePhase(data);
+	var value = 0;
+
+	if (phase === 'ping' || phase === 'prepare') {
+		if (!hasValue(data.ping_ms))
+			return 0;
+
+		value = parseFloat(data.ping_ms);
+		if (isNaN(value))
+			return 0;
+
+		return Math.max(5, Math.min(100, Math.round(100 - value)));
+	}
+
+	if (phase === 'upload')
+		value = parseFloat(data.upload_mbps);
+	else
+		value = parseFloat(data.download_mbps);
+
+	if (isNaN(value))
+		return 0;
+
+	return Math.min(100, Math.round(value / 10));
 }
 
 function gaugeStateText(data) {
@@ -227,72 +278,31 @@ function gaugeStateText(data) {
 }
 
 function gaugeMainValue(data) {
-	if (data && data.running)
-		return String(runningPercent(data));
-
-	if (data && hasValue(data.download_mbps))
-		return metricNumber(data.download_mbps);
-
-	return '--';
+	return activeMetric(data).value;
 }
 
 function gaugeMainUnit(data) {
-	if (data && data.running)
-		return '%';
-
-	if (data && hasValue(data.download_mbps))
-		return T('Mbps');
-
-	return '';
-}
-
-function renderProgress(data) {
-	var elapsed = runningElapsed(data);
-	var percent = runningPercent(data);
-
-	return E('div', { 'class': 'cbi-section yandex-internetometer-progress' }, [
-		E('div', { 'class': 'yandex-internetometer-progress-head' }, [
-			E('div', { 'class': 'yandex-internetometer-running-dot' }),
-			E('div', {}, [
-				E('strong', {}, T('Speed test in progress')),
-				E('div', { 'class': 'yandex-internetometer-progress-sub' },
-					T('Current stage: %s').format(runningPhase(data, elapsed)))
-			]),
-			E('div', { 'class': 'yandex-internetometer-progress-time' },
-				T('Elapsed: %s seconds').format(elapsed))
-		]),
-		E('div', { 'class': 'yandex-internetometer-progress-track' }, [
-			E('div', {
-				'class': 'yandex-internetometer-progress-fill',
-				'style': 'width:%d%%'.format(percent)
-			})
-		])
-	]);
+	return activeMetric(data).unit;
 }
 
 function stagePill(id, label, phase) {
 	var className = 'yandex-internetometer-stage-pill';
 	if (phase === id)
 		className += ' is-active';
-	else if (phase === 'finish')
+	else if (phase === 'complete')
 		className += ' is-done';
 
 	return E('div', { 'class': className }, label);
 }
 
 function renderStagePills(data) {
-	var phase = 'ready';
-
-	if (data && data.running)
-		phase = runningPhaseCode(data, runningElapsed(data));
-	else if (hasResult(data))
-		phase = 'finish';
+	var phase = activePhase(data);
 
 	return E('div', { 'class': 'yandex-internetometer-stages' }, [
 		stagePill('ping', T('Ping'), phase),
 		stagePill('download', T('Download'), phase),
 		stagePill('upload', T('Upload'), phase),
-		stagePill('finish', T('Complete'), phase)
+		stagePill('complete', T('Complete'), phase)
 	]);
 }
 
@@ -309,6 +319,7 @@ function renderHero(data) {
 	var needle = (-135 + (progress * 2.7)).toFixed(1) + 'deg';
 	var elapsed = runningElapsed(data);
 	var phaseText = data && data.running ? runningPhase(data, elapsed) : gaugeStateText(data);
+	var metric = activeMetric(data);
 
 	return E('div', { 'class': 'cbi-section yandex-internetometer-hero' }, [
 		E('div', {
@@ -317,9 +328,9 @@ function renderHero(data) {
 		}, [
 			E('div', { 'class': 'yandex-internetometer-needle' }),
 			E('div', { 'class': 'yandex-internetometer-gauge-inner' }, [
-				E('div', { 'class': 'yandex-internetometer-gauge-state' }, gaugeStateText(data)),
-				E('div', { 'class': 'yandex-internetometer-gauge-value' }, gaugeMainValue(data)),
-				E('div', { 'class': 'yandex-internetometer-gauge-unit' }, gaugeMainUnit(data)),
+				E('div', { 'class': 'yandex-internetometer-gauge-state' }, metric.label),
+				E('div', { 'class': 'yandex-internetometer-gauge-value' }, metric.value),
+				E('div', { 'class': 'yandex-internetometer-gauge-unit' }, metric.unit),
 				E('div', { 'class': 'yandex-internetometer-gauge-phase' }, phaseText)
 			])
 		]),
@@ -353,26 +364,12 @@ function renderStatus(data) {
 		localStartedAt = null;
 
 	var children = [];
-	if (statusData.running) {
-		children.push(renderProgress(statusData));
-	}
 
 	if (statusData.error) {
 		children.push(E('div', { 'class': 'alert-message warning' }, statusData.error));
 	}
 
 	children.push(renderHero(statusData));
-
-	children.push(E('div', { 'class': 'yandex-internetometer-grid' }, [
-		card(T('Download speed'), emptyValue(statusData.download_mbps, T('Mbps'))),
-		card(T('Upload speed'), emptyValue(statusData.upload_mbps, T('Mbps'))),
-		card(T('Latency'), emptyValue(statusData.ping_ms, T('ms'))),
-		card(T('Jitter'), emptyValue(statusData.jitter_ms, T('ms'))),
-		card(T('Streams'), emptyValue(statusData.streams)),
-		card(T('Server'), emptyValue(statusData.server)),
-		card(T('Probe servers'), emptyValue(statusData.probe_count)),
-		card(T('Last run'), emptyValue(statusData.timestamp))
-	]));
 
 	statusBox.innerHTML = '';
 	children.forEach(function(child) {
@@ -400,6 +397,7 @@ function renderActions() {
 				upload_mbps: null,
 				ping_ms: null,
 				jitter_ms: null,
+				phase: 'prepare',
 				error: null
 			});
 
@@ -507,10 +505,6 @@ return view.extend({
 					'.yandex-internetometer-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:14px 0 20px}',
 					'.yandex-internetometer-actions .cbi-button{min-height:38px;border-radius:999px;padding:8px 18px}',
 					'.yandex-internetometer-actions .cbi-button-action{font-weight:700;background:var(--yi-yellow);border-color:var(--yi-yellow);color:#25200f}',
-					'.yandex-internetometer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 22px}',
-					'.yandex-internetometer-card{margin:0;padding:12px}',
-					'.yandex-internetometer-card-title{font-size:12px;color:var(--text-color-medium);margin-bottom:6px}',
-					'.yandex-internetometer-card-value{font-size:20px;font-weight:600;line-height:1.25;overflow-wrap:anywhere}',
 					'.yandex-internetometer-hero{display:grid;grid-template-columns:minmax(240px,360px) minmax(0,1fr);gap:28px;align-items:center;margin:12px 0 18px;padding:24px;border-radius:18px;background:linear-gradient(135deg,var(--yi-panel),#151820 70%,#191b22);border:1px solid var(--yi-border);color:var(--yi-text);overflow:hidden}',
 					'.yandex-internetometer-gauge{position:relative;width:min(320px,76vw);aspect-ratio:1;margin:0 auto;border-radius:50%;display:grid;place-items:center;background:conic-gradient(from -135deg,var(--yi-yellow) 0 var(--yi-arc),rgba(148,154,170,.24) var(--yi-arc) 75%,transparent 75% 100%);box-shadow:0 18px 48px rgba(4,6,12,.28)}',
 					'.yandex-internetometer-gauge:before{content:"";position:absolute;inset:12px;border-radius:50%;border:1px solid rgba(244,241,232,.12)}',
@@ -533,16 +527,7 @@ return view.extend({
 					'.yandex-internetometer-detail-row{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;background:rgba(24,26,32,.92);min-width:0}',
 					'.yandex-internetometer-detail-row span{font-size:12px;color:var(--yi-muted);white-space:nowrap}',
 					'.yandex-internetometer-detail-row strong{font-size:13px;color:var(--yi-text);font-weight:700;text-align:right;overflow-wrap:anywhere;min-width:0}',
-					'.yandex-internetometer-progress{padding:16px;margin:12px 0 18px}',
-					'.yandex-internetometer-progress-head{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}',
-					'.yandex-internetometer-progress-sub{color:var(--text-color-medium);font-size:13px;margin-top:3px}',
-					'.yandex-internetometer-progress-time{color:var(--text-color-medium);font-size:13px}',
-					'.yandex-internetometer-progress-track{height:10px;border-radius:999px;background:rgba(127,127,127,.18);overflow:hidden}',
-					'.yandex-internetometer-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#ff6b6b,#ffd166,#4cc9f0);background-size:180% 100%;animation:yandexInternetometerFlow 1.1s linear infinite;transition:width .35s ease}',
-					'.yandex-internetometer-running-dot{width:12px;height:12px;border-radius:50%;background:#ff6b6b;box-shadow:0 0 0 0 rgba(255,107,107,.55);animation:yandexInternetometerPulse 1.2s ease-out infinite;flex:0 0 auto}',
 					'@media (max-width:780px){.yandex-internetometer-hero{grid-template-columns:1fr;padding:18px;gap:18px}.yandex-internetometer-feature-metrics,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.yandex-internetometer-detail-row span{white-space:normal}}',
-					'@keyframes yandexInternetometerPulse{0%{box-shadow:0 0 0 0 rgba(255,107,107,.55)}70%{box-shadow:0 0 0 10px rgba(255,107,107,0)}100%{box-shadow:0 0 0 0 rgba(255,107,107,0)}}',
-					'@keyframes yandexInternetometerFlow{0%{background-position:0 0}100%{background-position:180% 0}}'
 				].join('')),
 				E('h2', {}, T('Yandex Internetometer')),
 				E('p', {}, T('Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software.')),

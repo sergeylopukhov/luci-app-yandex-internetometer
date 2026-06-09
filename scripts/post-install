@@ -2,6 +2,14 @@
 
 rm -f /tmp/luci-indexcache.* 2>/dev/null || true
 
+if command -v uci >/dev/null 2>&1; then
+	streams="$(uci -q get yandex-internetometer.main.streams 2>/dev/null || true)"
+	if [ -z "$streams" ] || [ "$streams" = "3" ]; then
+		uci -q set yandex-internetometer.main.streams='8' 2>/dev/null || true
+		uci -q commit yandex-internetometer 2>/dev/null || true
+	fi
+fi
+
 if [ -x /etc/init.d/rpcd ]; then
 	/etc/init.d/rpcd reload >/dev/null 2>&1 || /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 fi

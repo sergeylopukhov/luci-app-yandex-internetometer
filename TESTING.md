@@ -28,6 +28,8 @@ apk add luci-app-yandex-internetometer
 yandex-internetometer run --json
 ```
 
+Confirm that a fresh config uses `streams: 8` unless the user changed `/etc/config/yandex-internetometer`.
+
 Confirm there is no jq regex error such as:
 
 ```text
@@ -49,13 +51,16 @@ rm -f /tmp/luci-indexcache.*
 
 6. Open the app for the first time and confirm Russian is selected by default.
 7. Start a test from LuCI and confirm the running indicator appears.
-8. Confirm animated progress and current stage update while the test is running.
-9. Confirm result cards update after the test finishes.
-10. Use the page language button and confirm only this app switches between Russian and English.
-11. Switch LuCI language to Russian and confirm Russian menu title `Интернетометр`.
-12. Switch LuCI language to English and confirm English menu title `Internetometer`.
-13. Simulate endpoint failure by blocking `yandex.ru` or Yandex CDN DNS and confirm the backend returns clean JSON with `ok=false`.
-14. Start two tests at once:
+8. Confirm the main gauge shows live ping during the latency phase.
+9. Confirm the main gauge shows live download speed during the download phase.
+10. Confirm the main gauge shows live upload speed during the upload phase.
+11. Confirm there is no duplicate result-card block below the main test panel.
+12. Confirm final values remain visible after the test finishes.
+13. Use the page language button and confirm only this app switches between Russian and English.
+14. Switch LuCI language to Russian and confirm Russian menu title `Интернетометр`.
+15. Switch LuCI language to English and confirm English menu title `Internetometer`.
+16. Simulate endpoint failure by blocking `yandex.ru` or Yandex CDN DNS and confirm the backend returns clean JSON with `ok=false`.
+17. Start two tests at once:
 
 ```sh
 yandex-internetometer start
@@ -64,7 +69,7 @@ yandex-internetometer run --json
 
 Confirm the second command reports `running=true` instead of starting another measurement.
 
-15. Reboot the router and confirm no stale running state remains:
+18. Reboot the router and confirm no stale running state remains:
 
 ```sh
 yandex-internetometer status

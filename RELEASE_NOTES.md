@@ -38,6 +38,14 @@ Hotfix `0.0.1-r6`:
 - documents that package installation was tested only on apk-based OpenWrt;
 - keeps project version `0.0.1`, package release is `r6`.
 
+Hotfix `0.0.1-r7`:
+
+- writes live ping, download, and upload values to the status JSON while a test is running;
+- changes the LuCI gauge to show the active metric instead of test completion percent;
+- removes the duplicate result-card block under the main test panel;
+- changes the default stream count to `8`;
+- keeps project version `0.0.1`, package release is `r7`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.

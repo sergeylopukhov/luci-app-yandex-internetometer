@@ -1,5 +1,5 @@
 config settings 'main'
-	option streams '3'
+	option streams '8'
 	option download_time '10'
 	option upload_time '10'
 	option upload_size '12000000'

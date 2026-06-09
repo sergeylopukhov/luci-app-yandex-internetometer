@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-yandex-internetometer
 PKG_VERSION:=0.0.1
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 
 PKG_MAINTAINER:=OpenWrt community
 PKG_LICENSE:=MIT
@@ -15,6 +15,13 @@ define Package/$(PKG_NAME)/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 rm -f /tmp/luci-indexcache.* 2>/dev/null || true
+if command -v uci >/dev/null 2>&1; then
+	streams="$$(uci -q get yandex-internetometer.main.streams 2>/dev/null || true)"
+	if [ -z "$$streams" ] || [ "$$streams" = "3" ]; then
+		uci -q set yandex-internetometer.main.streams='8' 2>/dev/null || true
+		uci -q commit yandex-internetometer 2>/dev/null || true
+	fi
+fi
 [ -x /etc/init.d/rpcd ] && /etc/init.d/rpcd reload >/dev/null 2>&1 || true
 exit 0
 endef

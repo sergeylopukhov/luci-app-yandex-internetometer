@@ -72,6 +72,9 @@ msgstr ""
 msgid "Ping"
 msgstr ""
 
+msgid "Preparing test"
+msgstr ""
+
 msgid "Probe servers"
 msgstr ""
 

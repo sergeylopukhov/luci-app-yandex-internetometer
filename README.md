@@ -9,7 +9,7 @@ LuCI-приложение и лёгкий CLI-backend для замера ско
 - добавляет страницу LuCI: `Status -> Internetometer`, в русской локали — «Интернетометр»;
 - измеряет HTTP RTT, jitter, входящую и исходящую скорость;
 - получает список probe-серверов из `https://yandex.ru/internet/api/v0/get-probes`;
-- показывает тест в веб-интерфейсе: этап, прогресс, итоговую скорость и параметры сервера;
+- показывает тест в веб-интерфейсе: текущий ping, текущую входящую или исходящую скорость, итоговую скорость и параметры сервера;
 - хранит временные файлы только в `/tmp/yandex-internetometer/`;
 - генерирует upload-payload потоком из `/dev/zero`, без записи больших файлов во flash;
 - отдаёт результат в JSON для CLI и LuCI.
@@ -110,7 +110,7 @@ opkg remove luci-app-yandex-internetometer
 yandex-internetometer run
 yandex-internetometer run --json
 yandex-internetometer run --debug
-yandex-internetometer run --streams 3 --download-time 10 --upload-time 10 --upload-size 12000000
+yandex-internetometer run --streams 8 --download-time 10 --upload-time 10 --upload-size 12000000
 yandex-internetometer start
 yandex-internetometer status
 yandex-internetometer stop
@@ -123,11 +123,12 @@ yandex-internetometer stop
   "ok": true,
   "running": false,
   "timestamp": "2026-06-09T12:00:00+03:00",
+  "phase": "complete",
   "download_mbps": 95.42,
   "upload_mbps": 47.11,
   "ping_ms": 12.34,
   "jitter_ms": 1.23,
-  "streams": 3,
+  "streams": 8,
   "download_time": 10,
   "upload_time": 10,
   "upload_enabled": 1,
@@ -147,6 +148,10 @@ yandex-internetometer stop
 - размер upload-payload;
 - включение или отключение исходящего теста;
 - debug-режим.
+
+По умолчанию используется 8 потоков.
+
+Во время активного теста `/usr/bin/yandex-internetometer status` возвращает промежуточные значения: сначала ping, затем текущую входящую скорость, затем текущую исходящую скорость. LuCI обновляет эти данные примерно раз в секунду.
 
 Русский язык включён по умолчанию внутри приложения. Кнопка `English` переключает только это приложение и не меняет глобальный язык LuCI.
 
