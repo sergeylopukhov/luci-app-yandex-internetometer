@@ -48,7 +48,7 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/sdk"
           ./scripts/feeds update luci packages
-          ./scripts/feeds install luci-base curl jq
+          ./scripts/feeds install lua liblua luci-base curl jq rpcd uci
           mkdir -p package/luci-app-yandex-internetometer
           rsync -a --delete \
             --exclude '.git' \
