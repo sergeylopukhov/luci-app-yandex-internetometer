@@ -10,14 +10,16 @@ Assets:
 Recommended apk installation uses the GitHub Pages repository:
 
 ```sh
-curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
   https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
 ARCH="$(apk --print-arch)"
-echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" \
-  >> /etc/apk/repositories.d/yandex-internetometer.list
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" > \
+  /etc/apk/repositories.d/yandex-internetometer.list
 apk update
 apk add luci-app-yandex-internetometer
 ```
+
+If an older test repository was already configured and `apk add` fails with `ADB integrity error`, refresh the key and clear `/var/cache/apk/*` before running `apk update` again.
 
 This is an unofficial Yandex Internetometer-compatible implementation. It is not official Yandex software.
 

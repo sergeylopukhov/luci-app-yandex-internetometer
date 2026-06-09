@@ -129,13 +129,18 @@
 
 		<h2>Установка через APK-репозиторий</h2>
 		<p>Для OpenWrt с <code>apk</code>. LuCI должен быть уже установлен на роутере:</p>
-		<pre><code>curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+		<pre><code>curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
   https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
 
 ARCH="$(apk --print-arch)"
-echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" \
-  &gt;&gt; /etc/apk/repositories.d/yandex-internetometer.list
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" &gt; \
+  /etc/apk/repositories.d/yandex-internetometer.list
 
+apk update
+apk add luci-app-yandex-internetometer</code></pre>
+
+		<p>Если раньше установка падала с <code>ADB integrity error</code>, перезапишите ключ и список репозитория, затем очистите локальный cache:</p>
+		<pre><code>rm -f /var/cache/apk/*
 apk update
 apk add luci-app-yandex-internetometer</code></pre>
 

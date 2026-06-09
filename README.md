@@ -18,13 +18,21 @@ LuCI-приложение и лёгкий CLI-backend для замера ско
 Для OpenWrt с `apk` лучше использовать репозиторий пакета. LuCI должен быть уже установлен на роутере.
 
 ```sh
-curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
   https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
 
 ARCH="$(apk --print-arch)"
-echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" \
-  >> /etc/apk/repositories.d/yandex-internetometer.list
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" > \
+  /etc/apk/repositories.d/yandex-internetometer.list
 
+apk update
+apk add luci-app-yandex-internetometer
+```
+
+Если ранее был добавлен старый тестовый репозиторий и установка падала с `ADB integrity error`, перезапишите ключ и список репозитория командами выше, затем выполните:
+
+```sh
+rm -f /var/cache/apk/*
 apk update
 apk add luci-app-yandex-internetometer
 ```
@@ -115,12 +123,12 @@ Most users should install from the GitHub release. Use SDK/buildroot only if you
 For apk-based OpenWrt:
 
 ```sh
-curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
   https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
 
 ARCH="$(apk --print-arch)"
-echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" \
-  >> /etc/apk/repositories.d/yandex-internetometer.list
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" > \
+  /etc/apk/repositories.d/yandex-internetometer.list
 
 apk update
 apk add luci-app-yandex-internetometer
@@ -233,6 +241,16 @@ Router CPU too weak: reduce stream count, download duration, upload duration, or
 Result is lower than expected: router CPU, NAT offload settings, Wi-Fi, VPN, SQM, and concurrent traffic can limit measured speed.
 
 Yandex endpoint changed: the backend returns an error such as `Yandex probe response has an unsupported structure`. Update the parser/endpoints.
+
+`ADB integrity error` during `apk add`: refresh the package key and clear the local apk cache:
+
+```sh
+curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
+rm -f /var/cache/apk/*
+apk update
+apk add luci-app-yandex-internetometer
+```
 
 ## Security and privacy
 
