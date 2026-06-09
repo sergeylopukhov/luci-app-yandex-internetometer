@@ -252,9 +252,9 @@ Result is lower than expected: router CPU, NAT offload settings, Wi-Fi, VPN, SQM
 
 Yandex endpoint changed: the backend returns an error such as `Yandex probe response has an unsupported structure`. Update the parser/endpoints.
 
-`jq was compiled without ONIGURUMA regex library`: upgrade to `0.0.1-r4` or newer. The backend no longer uses jq regex functions.
+`jq was compiled without ONIGURUMA regex library`: upgrade to `0.0.1-r5` or newer. The backend no longer uses jq regex functions.
 
-LuCI menu item is missing after install: upgrade to `0.0.1-r4` or newer. The package clears LuCI menu cache after installation. For an already installed old build, run:
+LuCI menu item is missing after install: upgrade to `0.0.1-r5` or newer. The package clears LuCI menu cache after installation. For an already installed old build, run:
 
 ```sh
 rm -f /tmp/luci-indexcache.*

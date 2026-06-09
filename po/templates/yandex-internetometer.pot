@@ -15,10 +15,16 @@ msgstr ""
 msgid "Checking latency"
 msgstr ""
 
+msgid "Complete"
+msgstr ""
+
 msgid "Current stage: %s"
 msgstr ""
 
 msgid "Debug mode"
+msgstr ""
+
+msgid "Download"
 msgstr ""
 
 msgid "Download duration"
@@ -34,6 +40,9 @@ msgid "Enable upload test"
 msgstr ""
 
 msgid "Finishing the test"
+msgstr ""
+
+msgid "HTTP RTT"
 msgstr ""
 
 msgid "Internetometer"
@@ -60,10 +69,22 @@ msgstr ""
 msgid "Not available"
 msgstr ""
 
+msgid "Ping"
+msgstr ""
+
 msgid "Probe servers"
 msgstr ""
 
+msgid "Ready"
+msgstr ""
+
+msgid "Ready to test"
+msgstr ""
+
 msgid "Refresh status"
+msgstr ""
+
+msgid "Result"
 msgstr ""
 
 msgid "Seconds."
@@ -97,6 +118,9 @@ msgid "Unable to execute backend command"
 msgstr ""
 
 msgid "Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software."
+msgstr ""
+
+msgid "Upload"
 msgstr ""
 
 msgid "Upload duration"

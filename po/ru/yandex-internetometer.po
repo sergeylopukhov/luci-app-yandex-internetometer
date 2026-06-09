@@ -12,11 +12,17 @@ msgstr "Байт на один исходящий запрос. Данные и�
 msgid "Checking latency"
 msgstr "Проверка задержки"
 
+msgid "Complete"
+msgstr "Готово"
+
 msgid "Current stage: %s"
 msgstr "Текущий этап: %s"
 
 msgid "Debug mode"
 msgstr "Режим отладки"
+
+msgid "Download"
+msgstr "Скачивание"
 
 msgid "Download duration"
 msgstr "Длительность входящего теста"
@@ -32,6 +38,9 @@ msgstr "Включить исходящий тест"
 
 msgid "Finishing the test"
 msgstr "Завершение теста"
+
+msgid "HTTP RTT"
+msgstr "HTTP RTT"
 
 msgid "Internetometer"
 msgstr "Интернетометр"
@@ -57,11 +66,23 @@ msgstr "Измерение исходящей скорости"
 msgid "Not available"
 msgstr "Нет данных"
 
+msgid "Ping"
+msgstr "Пинг"
+
 msgid "Probe servers"
 msgstr "Probe-серверы"
 
+msgid "Ready"
+msgstr "Готов"
+
+msgid "Ready to test"
+msgstr "Готов к тесту"
+
 msgid "Refresh status"
 msgstr "Обновить статус"
+
+msgid "Result"
+msgstr "Результат"
 
 msgid "Seconds."
 msgstr "Секунды."
@@ -95,6 +116,9 @@ msgstr "Не удалось выполнить backend-команду"
 
 msgid "Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software."
 msgstr "Неофициальный совместимый с Яндекс Интернетометром тест скорости через probe-серверы Яндекса. Это не официальное ПО Яндекса."
+
+msgid "Upload"
+msgstr "Загрузка"
 
 msgid "Upload duration"
 msgstr "Длительность исходящего теста"

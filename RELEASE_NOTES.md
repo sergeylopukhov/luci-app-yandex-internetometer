@@ -23,6 +23,13 @@ Hotfix `0.0.1-r4`:
 - sets action buttons to `type="button"` to avoid accidental form submission;
 - keeps project version `0.0.1`, package release is `r4`.
 
+Hotfix `0.0.1-r5`:
+
+- redesigns the LuCI page around a Speedtest-like central gauge;
+- shows test stage pills for ping, download, upload, and completion;
+- keeps the UI visually similar to a speed tester without cloning Yandex or Ookla branding;
+- keeps project version `0.0.1`, package release is `r5`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
