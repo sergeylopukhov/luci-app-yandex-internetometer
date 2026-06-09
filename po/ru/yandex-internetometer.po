@@ -1,0 +1,88 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-yandex-internetometer\n"
+"PO-Revision-Date: 2026-06-09 12:00+0300\n"
+"Language: ru\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Bytes per upload request. The payload is streamed from /dev/zero and is not stored on flash."
+msgstr "Байт на один upload-запрос. Данные идут потоком из /dev/zero и не сохраняются во flash."
+
+msgid "Debug mode"
+msgstr "Режим отладки"
+
+msgid "Download"
+msgstr "Входящая"
+
+msgid "Download duration"
+msgstr "Длительность входящего теста"
+
+msgid "Enable upload test"
+msgstr "Включить исходящий тест"
+
+msgid "Jitter"
+msgstr "Джиттер"
+
+msgid "Last run time"
+msgstr "Время последнего запуска"
+
+msgid "Mbps"
+msgstr "Мбит/с"
+
+msgid "Not available"
+msgstr "Нет данных"
+
+msgid "Ping"
+msgstr "Задержка"
+
+msgid "Probe count"
+msgstr "Количество probe-серверов"
+
+msgid "Refresh status"
+msgstr "Обновить статус"
+
+msgid "Seconds."
+msgstr "Секунды."
+
+msgid "Server"
+msgstr "Сервер"
+
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Start test"
+msgstr "Запустить тест"
+
+msgid "Stop test"
+msgstr "Остановить тест"
+
+msgid "Stream count"
+msgstr "Количество потоков"
+
+msgid "Streams"
+msgstr "Потоки"
+
+msgid "The speed test is running. Results will update automatically."
+msgstr "Тест скорости выполняется. Результаты обновятся автоматически."
+
+msgid "Unable to execute backend command"
+msgstr "Не удалось выполнить backend-команду"
+
+msgid "Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software."
+msgstr "Неофициальный совместимый с Яндекс Интернетометром тест скорости через probe-серверы Яндекса. Это не официальное ПО Яндекса."
+
+msgid "Upload"
+msgstr "Исходящая"
+
+msgid "Upload duration"
+msgstr "Длительность исходящего теста"
+
+msgid "Upload payload size"
+msgstr "Размер upload-payload"
+
+msgid "Yandex Internetometer"
+msgstr "Яндекс Интернетометр"
+
+msgid "ms"
+msgstr "мс"

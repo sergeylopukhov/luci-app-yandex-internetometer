@@ -1,0 +1,18 @@
+{
+	"luci-app-yandex-internetometer": {
+		"description": "Grant access to Yandex Internetometer LuCI app",
+		"read": {
+			"uci": [ "yandex-internetometer" ],
+			"file": {
+				"/usr/libexec/yandex-internetometer/status": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [ "yandex-internetometer" ],
+			"file": {
+				"/usr/libexec/yandex-internetometer/start": [ "exec" ],
+				"/usr/libexec/yandex-internetometer/stop": [ "exec" ]
+			}
+		}
+	}
+}

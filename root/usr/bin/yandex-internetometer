@@ -1,0 +1,498 @@
+#!/bin/ash
+
+STATE_DIR="/tmp/yandex-internetometer"
+LOCK_DIR="$STATE_DIR/lock"
+PID_FILE="$STATE_DIR/pid"
+RESULT_FILE="$STATE_DIR/result.json"
+LOG_FILE="$STATE_DIR/debug.log"
+PROBES_FILE="$STATE_DIR/probes.json"
+SELF="/usr/bin/yandex-internetometer"
+GET_PROBES_URL="https://yandex.ru/internet/api/v0/get-probes"
+REFERER="https://yandex.ru/internet/"
+USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
+
+STREAMS="3"
+DOWNLOAD_TIME="10"
+UPLOAD_TIME="10"
+UPLOAD_SIZE="12000000"
+UPLOAD_ENABLED="1"
+DEBUG="0"
+JSON_MODE="0"
+
+usage() {
+	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1]"
+	printf '%s\n' "       yandex-internetometer start|status|stop"
+}
+
+ensure_state_dir() {
+	mkdir -p "$STATE_DIR"
+}
+
+timestamp() {
+	date '+%Y-%m-%dT%H:%M:%S%z' | sed 's/\(..\)$/:\1/'
+}
+
+is_uint() {
+	case "$1" in
+		''|*[!0-9]*) return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
+validate_uint_range() {
+	value="$1"
+	min="$2"
+	max="$3"
+	name="$4"
+
+	if ! is_uint "$value"; then
+		fail "$name must be an integer"
+	fi
+	if [ "$value" -lt "$min" ] || [ "$value" -gt "$max" ]; then
+		fail "$name must be between $min and $max"
+	fi
+}
+
+debug_log() {
+	[ "$DEBUG" = "1" ] || return 0
+	ensure_state_dir
+	printf '%s %s\n' "$(timestamp)" "$*" >> "$LOG_FILE"
+}
+
+json_result() {
+	ok="$1"
+	running="$2"
+	download="$3"
+	upload="$4"
+	ping="$5"
+	jitter="$6"
+	probe_count="$7"
+	server="$8"
+	error="$9"
+
+	jq -cn \
+		--argjson ok "$ok" \
+		--argjson running "$running" \
+		--arg timestamp "$(timestamp)" \
+		--arg download "$download" \
+		--arg upload "$upload" \
+		--arg ping "$ping" \
+		--arg jitter "$jitter" \
+		--arg streams "$STREAMS" \
+		--arg download_time "$DOWNLOAD_TIME" \
+		--arg upload_time "$UPLOAD_TIME" \
+		--arg probe_count "$probe_count" \
+		--arg server "$server" \
+		--arg error "$error" '
+		def num_or_null($v): if $v == "" or $v == "null" then null else ($v | tonumber) end;
+		def int_or_default($v; $d): if $v | test("^[0-9]+$") then ($v | tonumber) else $d end;
+		{
+			ok: $ok,
+			running: $running,
+			timestamp: $timestamp,
+			download_mbps: num_or_null($download),
+			upload_mbps: num_or_null($upload),
+			ping_ms: num_or_null($ping),
+			jitter_ms: num_or_null($jitter),
+			streams: int_or_default($streams; 3),
+			download_time: int_or_default($download_time; 10),
+			upload_time: int_or_default($upload_time; 10),
+			probe_count: int_or_default($probe_count; 0),
+			server: (if $server == "" or $server == "null" then null else $server end),
+			error: (if $error == "" or $error == "null" then null else $error end)
+		}'
+}
+
+fail() {
+	message="$1"
+	if [ "$JSON_MODE" = "1" ]; then
+		json_result false false null null null null 0 null "$message"
+	else
+		printf 'Error: %s\n' "$message" >&2
+	fi
+	exit 1
+}
+
+load_config() {
+	if command -v uci >/dev/null 2>&1; then
+		value="$(uci -q get yandex-internetometer.main.streams 2>/dev/null)"
+		[ -n "$value" ] && STREAMS="$value"
+		value="$(uci -q get yandex-internetometer.main.download_time 2>/dev/null)"
+		[ -n "$value" ] && DOWNLOAD_TIME="$value"
+		value="$(uci -q get yandex-internetometer.main.upload_time 2>/dev/null)"
+		[ -n "$value" ] && UPLOAD_TIME="$value"
+		value="$(uci -q get yandex-internetometer.main.upload_size 2>/dev/null)"
+		[ -n "$value" ] && UPLOAD_SIZE="$value"
+		value="$(uci -q get yandex-internetometer.main.upload_enabled 2>/dev/null)"
+		[ -n "$value" ] && UPLOAD_ENABLED="$value"
+		value="$(uci -q get yandex-internetometer.main.debug 2>/dev/null)"
+		[ -n "$value" ] && DEBUG="$value"
+	fi
+}
+
+parse_run_args() {
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+			--json)
+				JSON_MODE="1"
+				shift
+				;;
+			--debug)
+				DEBUG="1"
+				shift
+				;;
+			--streams)
+				[ -n "$2" ] || fail "--streams requires a value"
+				STREAMS="$2"
+				shift 2
+				;;
+			--download-time)
+				[ -n "$2" ] || fail "--download-time requires a value"
+				DOWNLOAD_TIME="$2"
+				shift 2
+				;;
+			--upload-time)
+				[ -n "$2" ] || fail "--upload-time requires a value"
+				UPLOAD_TIME="$2"
+				shift 2
+				;;
+			--upload-size)
+				[ -n "$2" ] || fail "--upload-size requires a value"
+				UPLOAD_SIZE="$2"
+				shift 2
+				;;
+			--upload-enabled)
+				[ -n "$2" ] || fail "--upload-enabled requires a value"
+				UPLOAD_ENABLED="$2"
+				shift 2
+				;;
+			*)
+				fail "Unknown option: $1"
+				;;
+		esac
+	done
+}
+
+validate_settings() {
+	validate_uint_range "$STREAMS" 1 8 "streams"
+	validate_uint_range "$DOWNLOAD_TIME" 1 60 "download_time"
+	validate_uint_range "$UPLOAD_TIME" 1 60 "upload_time"
+	validate_uint_range "$UPLOAD_SIZE" 1024 50000000 "upload_size"
+
+	case "$UPLOAD_ENABLED" in
+		0|1) ;;
+		*) fail "upload_enabled must be 0 or 1" ;;
+	esac
+	case "$DEBUG" in
+		0|1) ;;
+		*) fail "debug must be 0 or 1" ;;
+	esac
+}
+
+running_pid() {
+	[ -s "$PID_FILE" ] || return 1
+	pid="$(cat "$PID_FILE" 2>/dev/null)"
+	is_uint "$pid" || return 1
+	kill -0 "$pid" 2>/dev/null
+}
+
+fetch_probes() {
+	curl -fsSL \
+		--connect-timeout 5 \
+		--max-time 10 \
+		-H "Referer: $REFERER" \
+		-H "User-Agent: $USER_AGENT" \
+		-o "$PROBES_FILE" \
+		"$GET_PROBES_URL" 2>>"$LOG_FILE" || fail "Unable to fetch Yandex probe list"
+
+	jq -e '.latency.probes[0].url and .download.probes[0].url and .upload.probes[0].url' "$PROBES_FILE" >/dev/null 2>&1 || \
+		fail "Yandex probe response has an unsupported structure"
+}
+
+probe_count() {
+	jq '[.latency.probes[]?.url, .download.probes[]?.url, .upload.probes[]?.url] | length' "$PROBES_FILE" 2>/dev/null
+}
+
+server_name() {
+	jq -r '.latency.probes[0].url // .download.probes[0].url // empty' "$PROBES_FILE" 2>/dev/null | \
+		sed -n 's#^https://\([^/]*\)/.*#\1#p'
+}
+
+latency_urls() {
+	jq -r '.latency.probes[]?.url' "$PROBES_FILE" 2>/dev/null
+}
+
+download_urls() {
+	jq -r '.download.probes[]?.url | select(test("/probes/50mb"))' "$PROBES_FILE" 2>/dev/null
+}
+
+upload_urls() {
+	jq -r '.upload.probes[]?.url | select(test("size=30720"))' "$PROBES_FILE" 2>/dev/null
+}
+
+measure_latency() {
+	out="$1"
+	: > "$out"
+	count="0"
+
+	latency_urls | while IFS= read -r url; do
+		[ -n "$url" ] || continue
+		i="0"
+		while [ "$i" -lt 3 ]; do
+			curl -fsS -o /dev/null \
+				--connect-timeout 3 \
+				--max-time 5 \
+				-H "Referer: $REFERER" \
+				-H "User-Agent: $USER_AGENT" \
+				-w '%{time_total}\n' \
+				"$url" 2>>"$LOG_FILE" >> "$out" || true
+			i=$((i + 1))
+			count=$((count + 1))
+		done
+	done
+
+	[ -s "$out" ] || fail "Unable to measure latency"
+}
+
+measure_download() {
+	out="$1"
+	urls="$2"
+	: > "$out"
+	end_time=$(( $(date +%s) + DOWNLOAD_TIME ))
+	i="1"
+
+	while [ "$i" -le "$STREAMS" ]; do
+		(
+			n="$i"
+			while [ "$(date +%s)" -lt "$end_time" ]; do
+				url="$(sed -n "${n}p" "$urls")"
+				[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
+				curl -fsS -o /dev/null \
+					--connect-timeout 5 \
+					--max-time "$DOWNLOAD_TIME" \
+					-H "Referer: $REFERER" \
+					-H "User-Agent: $USER_AGENT" \
+					-w '%{size_download}\n' \
+					"$url" 2>>"$LOG_FILE" >> "$out" || true
+				n=$((n + STREAMS))
+			done
+		) &
+		i=$((i + 1))
+	done
+	wait
+
+	[ -s "$out" ] || fail "Unable to measure download speed"
+}
+
+measure_upload() {
+	out="$1"
+	urls="$2"
+	: > "$out"
+	end_time=$(( $(date +%s) + UPLOAD_TIME ))
+	i="1"
+
+	while [ "$i" -le "$STREAMS" ]; do
+		(
+			n="$i"
+			while [ "$(date +%s)" -lt "$end_time" ]; do
+				url="$(sed -n "${n}p" "$urls")"
+				[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
+				head -c "$UPLOAD_SIZE" /dev/zero | curl -fsS -o /dev/null \
+					--connect-timeout 5 \
+					--max-time "$UPLOAD_TIME" \
+					-H "Referer: $REFERER" \
+					-H "User-Agent: $USER_AGENT" \
+					-H "Content-Type: application/octet-stream" \
+					--data-binary @- \
+					-w '%{size_upload}\n' \
+					"$url" 2>>"$LOG_FILE" >> "$out" || true
+				n=$((n + STREAMS))
+			done
+		) &
+		i=$((i + 1))
+	done
+	wait
+
+	[ -s "$out" ] || fail "Unable to measure upload speed"
+}
+
+sum_file() {
+	awk '{ s += $1 } END { printf "%.0f", s }' "$1"
+}
+
+mbps_from_bytes() {
+	bytes="$1"
+	seconds="$2"
+	awk -v b="$bytes" -v s="$seconds" 'BEGIN { if (s <= 0) printf "0.00"; else printf "%.2f", (b * 8) / s / 1000000 }'
+}
+
+latency_stats() {
+	file="$1"
+	awk '
+		{ v[++n] = $1 * 1000; sum += v[n] }
+		END {
+			if (n == 0) {
+				printf "null null";
+				exit;
+			}
+			avg = sum / n;
+			for (i = 1; i <= n; i++) {
+				d = v[i] - avg;
+				if (d < 0) d = -d;
+				jsum += d;
+			}
+			printf "%.2f %.2f", avg, jsum / n;
+		}
+	' "$file"
+}
+
+run_test() {
+	ensure_state_dir
+	if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+		if running_pid; then
+			json_result true true null null null null 0 null null
+			exit 0
+		fi
+		rm -rf "$LOCK_DIR"
+		mkdir "$LOCK_DIR" 2>/dev/null || fail "Another test is already running"
+	fi
+
+	printf '%s\n' "$$" > "$PID_FILE"
+	tmpdir="$(mktemp -d "$STATE_DIR/run.XXXXXX")" || fail "Unable to create temporary directory"
+	cleanup() {
+		rm -rf "$tmpdir" "$LOCK_DIR"
+		rm -f "$PID_FILE"
+	}
+	trap cleanup EXIT INT TERM
+
+	: > "$LOG_FILE"
+	debug_log "starting test streams=$STREAMS download_time=$DOWNLOAD_TIME upload_time=$UPLOAD_TIME upload_size=$UPLOAD_SIZE upload_enabled=$UPLOAD_ENABLED"
+	fetch_probes
+
+	probes="$(probe_count)"
+	server="$(server_name)"
+	[ -n "$server" ] || server="Yandex CDN"
+
+	download_urls > "$tmpdir/download.urls"
+	upload_urls > "$tmpdir/upload.urls"
+	[ -s "$tmpdir/download.urls" ] || fail "No Yandex download probes are available"
+	if [ "$UPLOAD_ENABLED" = "1" ]; then
+		[ -s "$tmpdir/upload.urls" ] || fail "No Yandex upload probes are available"
+	fi
+
+	measure_latency "$tmpdir/latency.txt"
+	set -- $(latency_stats "$tmpdir/latency.txt")
+	ping_ms="$1"
+	jitter_ms="$2"
+
+	measure_download "$tmpdir/download.txt" "$tmpdir/download.urls"
+	download_bytes="$(sum_file "$tmpdir/download.txt")"
+	download_mbps="$(mbps_from_bytes "$download_bytes" "$DOWNLOAD_TIME")"
+
+	if [ "$UPLOAD_ENABLED" = "1" ]; then
+		measure_upload "$tmpdir/upload.txt" "$tmpdir/upload.urls"
+		upload_bytes="$(sum_file "$tmpdir/upload.txt")"
+		upload_mbps="$(mbps_from_bytes "$upload_bytes" "$UPLOAD_TIME")"
+	else
+		upload_mbps="null"
+	fi
+
+	json="$(json_result true false "$download_mbps" "$upload_mbps" "$ping_ms" "$jitter_ms" "$probes" "$server" null)"
+	printf '%s\n' "$json" > "$RESULT_FILE"
+
+	if [ "$JSON_MODE" = "1" ]; then
+		printf '%s\n' "$json"
+	else
+		printf 'Download: %s Mbps\n' "$download_mbps"
+		printf 'Upload: %s Mbps\n' "$upload_mbps"
+		printf 'Ping: %s ms\n' "$ping_ms"
+		printf 'Jitter: %s ms\n' "$jitter_ms"
+		printf 'Server: %s\n' "$server"
+	fi
+}
+
+start_test() {
+	ensure_state_dir
+	if running_pid; then
+		json_result true true null null null null 0 null null
+		return 0
+	fi
+
+	rm -rf "$LOCK_DIR"
+	json_result true true null null null null 0 null null > "$RESULT_FILE"
+	(
+		"$SELF" run --json > "$RESULT_FILE.tmp" 2>>"$LOG_FILE"
+		mv "$RESULT_FILE.tmp" "$RESULT_FILE"
+	) &
+	bgpid="$!"
+	printf '%s\n' "$bgpid" > "$PID_FILE"
+	json_result true true null null null null 0 null null
+}
+
+status_test() {
+	ensure_state_dir
+	if running_pid; then
+		if [ -s "$RESULT_FILE" ]; then
+			jq '.running = true' "$RESULT_FILE" 2>/dev/null || json_result true true null null null null 0 null null
+		else
+			json_result true true null null null null 0 null null
+		fi
+		return 0
+	fi
+
+	rm -f "$PID_FILE"
+	rm -rf "$LOCK_DIR"
+	if [ -s "$RESULT_FILE" ]; then
+		cat "$RESULT_FILE"
+	else
+		json_result true false null null null null 0 null null
+	fi
+}
+
+stop_test() {
+	ensure_state_dir
+	if running_pid; then
+		pid="$(cat "$PID_FILE" 2>/dev/null)"
+		kill "$pid" 2>/dev/null || true
+		sleep 1
+		kill -9 "$pid" 2>/dev/null || true
+	fi
+	rm -f "$PID_FILE" "$RESULT_FILE.tmp"
+	rm -rf "$LOCK_DIR"
+	json_result true false null null null null 0 null null
+}
+
+command="$1"
+[ -n "$command" ] || {
+	usage
+	exit 1
+}
+shift
+
+load_config
+
+case "$command" in
+	run)
+		parse_run_args "$@"
+		validate_settings
+		run_test
+		;;
+	start)
+		validate_settings
+		start_test
+		;;
+	status)
+		validate_settings
+		status_test
+		;;
+	stop)
+		validate_settings
+		stop_test
+		;;
+	-h|--help|help)
+		usage
+		;;
+	*)
+		fail "Unknown command: $command"
+		;;
+esac

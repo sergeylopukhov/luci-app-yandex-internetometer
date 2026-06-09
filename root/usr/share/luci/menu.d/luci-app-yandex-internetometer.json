@@ -1,0 +1,13 @@
+{
+	"admin/status/yandex-internetometer": {
+		"title": "Yandex Internetometer",
+		"order": 90,
+		"action": {
+			"type": "view",
+			"path": "status/yandex-internetometer"
+		},
+		"depends": {
+			"acl": [ "luci-app-yandex-internetometer" ]
+		}
+	}
+}
