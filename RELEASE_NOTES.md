@@ -51,6 +51,12 @@ Hotfix `0.0.1-r8`:
 - changes the LuCI view module path to force browsers to load the new live-metrics UI instead of a cached percent-based view;
 - keeps project version `0.0.1`, package release is `r8`.
 
+Hotfix `0.0.1-r9`:
+
+- ships the new live-metrics LuCI UI under both the old and new view module paths;
+- makes the universal installer use `apk add --upgrade` for already installed apk packages;
+- keeps project version `0.0.1`, package release is `r9`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
@@ -81,7 +87,7 @@ For an already installed older test build:
 ```sh
 rm -f /var/cache/apk/*
 apk update
-apk upgrade luci-app-yandex-internetometer
+apk add --upgrade luci-app-yandex-internetometer
 ```
 
 If an older test repository was already configured and `apk add` fails with `ADB integrity error`, refresh the key and clear `/var/cache/apk/*` before running `apk update` again.

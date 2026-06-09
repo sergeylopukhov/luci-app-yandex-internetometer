@@ -58,7 +58,7 @@ install_with_apk() {
 
 	if apk info -e "$PKG" >/dev/null 2>&1; then
 		log "Пакет уже установлен. Проверяю обновление."
-		apk upgrade "$PKG"
+		apk add --upgrade "$PKG" || apk upgrade "$PKG"
 	else
 		log "Устанавливаю пакет."
 		apk add "$PKG"

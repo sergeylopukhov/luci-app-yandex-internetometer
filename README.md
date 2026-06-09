@@ -75,7 +75,7 @@ apk add luci-app-yandex-internetometer
 ```sh
 rm -f /var/cache/apk/*
 apk update
-apk upgrade luci-app-yandex-internetometer
+apk add --upgrade luci-app-yandex-internetometer
 ```
 
 ## Ручная установка через opkg
