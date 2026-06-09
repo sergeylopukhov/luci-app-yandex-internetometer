@@ -79,12 +79,16 @@ jobs:
           tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
 
       - name: Build apk assets
+        env:
+          APK_PRIVATE_KEY: ${{ secrets.YANDEX_INTERNETOMETER_APK_PRIVATE_KEY }}
         run: |
           set -eu
           SDK="$RUNNER_TEMP/sdk"
           PKGROOT="$RUNNER_TEMP/pkgroot"
           test -x "$SDK/staging_dir/host/bin/apk"
-          if [ ! -f "$SDK/private-key.pem" ]; then
+          if [ -n "${APK_PRIVATE_KEY:-}" ]; then
+            printf '%s\n' "$APK_PRIVATE_KEY" > "$SDK/private-key.pem"
+          elif [ ! -f "$SDK/private-key.pem" ]; then
             openssl ecparam -name prime256v1 -genkey -noout -out "$SDK/private-key.pem"
           fi
           openssl ec -in "$SDK/private-key.pem" -pubout -out "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub"
