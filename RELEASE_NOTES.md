@@ -20,3 +20,5 @@ apk add luci-app-yandex-internetometer
 ```
 
 This is an unofficial Yandex Internetometer-compatible implementation. It is not official Yandex software.
+
+The package depends only on `curl` and `jq`; LuCI is expected to be already installed.

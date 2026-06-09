@@ -8,7 +8,7 @@ PKG_MAINTAINER:=OpenWrt community
 PKG_LICENSE:=MIT
 
 LUCI_TITLE:=LuCI support for Yandex Internetometer-compatible speed test
-LUCI_DEPENDS:=+luci-base +curl +rpcd +uci +jq
+LUCI_DEPENDS:=+curl +jq
 LUCI_PKGARCH:=all
 
 include $(TOPDIR)/feeds/luci/luci.mk

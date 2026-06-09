@@ -48,7 +48,7 @@ jobs:
           cat > "$WORK/control/control" <<EOF
           Package: $PKG_NAME
           Version: $PKG_VERSION
-          Depends: luci-base, curl, rpcd, uci, jq
+          Depends: curl, jq
           Source: https://github.com/sergeylopukhov/luci-app-yandex-internetometer
           SourceName: $PKG_NAME
           License: MIT
@@ -144,7 +144,7 @@ jobs:
               --info "url:https://github.com/sergeylopukhov/luci-app-yandex-internetometer" \
               --info "maintainer:Sergey Lopukhov" \
               --info "description:LuCI app for unofficial Yandex Internetometer-compatible speed tests" \
-              --info "depends:libc luci-base curl rpcd uci jq" \
+              --info "depends:libc curl jq" \
               --files "$PKGROOT" \
               --sign "$SDK/private-key.pem" \
               --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk"
@@ -156,7 +156,7 @@ jobs:
           for arch in $ARCHES; do
             dir="$REPO/$arch/yandex-internetometer"
             mkdir -p "$dir"
-            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk" "$dir/"
+            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk" "$dir/luci-app-yandex-internetometer-0.0.1-r1.apk"
             (
               cd "$dir"
               "$SDK/staging_dir/host/bin/apk" mkndx \

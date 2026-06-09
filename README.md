@@ -15,7 +15,7 @@ LuCI-приложение и лёгкий CLI-backend для замера ско
 
 ## Установка из релиза
 
-Для OpenWrt с `apk` лучше использовать репозиторий пакета:
+Для OpenWrt с `apk` лучше использовать репозиторий пакета. LuCI должен быть уже установлен на роутере.
 
 ```sh
 curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
@@ -104,9 +104,7 @@ No VPS, Ookla, speedtest.net, Python, Node.js, npm, or bash is required on the r
 - BusyBox-compatible `/bin/ash`
 - `curl`
 - `jq`
-- `uci`
-- `rpcd`
-- `luci-base`
+- working LuCI installation
 
 `jq` is intentionally used to parse Yandex probe JSON safely. If Yandex changes the response structure, the backend returns a clean JSON error.
 
