@@ -80,6 +80,7 @@ json_result() {
 	json_streams="$(json_uint_or_default "$STREAMS" 3)"
 	json_download_time="$(json_uint_or_default "$DOWNLOAD_TIME" 10)"
 	json_upload_time="$(json_uint_or_default "$UPLOAD_TIME" 10)"
+	json_upload_enabled="$(json_uint_or_default "$UPLOAD_ENABLED" 1)"
 	json_probe_count="$(json_uint_or_default "$probe_count" 0)"
 
 	jq -cn \
@@ -93,6 +94,7 @@ json_result() {
 		--argjson streams "$json_streams" \
 		--argjson download_time "$json_download_time" \
 		--argjson upload_time "$json_upload_time" \
+		--argjson upload_enabled "$json_upload_enabled" \
 		--argjson probe_count "$json_probe_count" \
 		--arg server "$server" \
 		--arg error "$error" '
@@ -108,6 +110,7 @@ json_result() {
 			streams: $streams,
 			download_time: $download_time,
 			upload_time: $upload_time,
+			upload_enabled: $upload_enabled,
 			probe_count: $probe_count,
 			server: (if $server == "" or $server == "null" then null else $server end),
 			error: (if $error == "" or $error == "null" then null else $error end)

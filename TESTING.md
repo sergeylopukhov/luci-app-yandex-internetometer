@@ -29,7 +29,7 @@ jq was compiled without ONIGURUMA regex library
 4. Confirm the LuCI menu item appears under:
 
 ```text
-Status -> Yandex Internetometer
+Status -> Internetometer
 ```
 
 If it does not appear immediately, clear LuCI cache and reload rpcd:
@@ -40,11 +40,13 @@ rm -f /tmp/luci-indexcache.*
 ```
 
 5. Start a test from LuCI and confirm the running indicator appears.
-6. Confirm result cards update after the test finishes.
-7. Switch LuCI language to Russian and confirm Russian UI strings.
-8. Switch LuCI language to English and confirm English UI strings.
-9. Simulate endpoint failure by blocking `yandex.ru` or Yandex CDN DNS and confirm the backend returns clean JSON with `ok=false`.
-10. Start two tests at once:
+6. Confirm animated progress and current stage update while the test is running.
+7. Confirm result cards update after the test finishes.
+8. Use the page language button and confirm only this app switches between Russian and English.
+9. Switch LuCI language to Russian and confirm Russian menu title `Интернетометр`.
+10. Switch LuCI language to English and confirm English menu title `Internetometer`.
+11. Simulate endpoint failure by blocking `yandex.ru` or Yandex CDN DNS and confirm the backend returns clean JSON with `ok=false`.
+12. Start two tests at once:
 
 ```sh
 yandex-internetometer start
@@ -53,7 +55,7 @@ yandex-internetometer run --json
 
 Confirm the second command reports `running=true` instead of starting another measurement.
 
-11. Reboot the router and confirm no stale running state remains:
+13. Reboot the router and confirm no stale running state remains:
 
 ```sh
 yandex-internetometer status

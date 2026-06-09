@@ -11,7 +11,7 @@ permissions:
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PKG_VERSION: 0.0.1-r2
+  PKG_VERSION: 0.0.1-r3
 
 jobs:
   build:
@@ -36,6 +36,11 @@ jobs:
           cp -a root/. "$PKGROOT"/
           mkdir -p "$PKGROOT/www"
           cp -a htdocs/. "$PKGROOT/www"/
+          find "$PKGROOT" -name .DS_Store -delete
+          mkdir -p "$PKGROOT/usr/lib/lua/luci/i18n"
+          python3 scripts/po2lmo.py \
+            po/ru/yandex-internetometer.po \
+            "$PKGROOT/usr/lib/lua/luci/i18n/yandex-internetometer.ru.lmo"
           find "$PKGROOT" -type d -print
           find "$PKGROOT" -type f -print
 

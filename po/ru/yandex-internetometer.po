@@ -1,43 +1,64 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: luci-app-yandex-internetometer\n"
-"PO-Revision-Date: 2026-06-09 12:00+0300\n"
+"PO-Revision-Date: 2026-06-09 14:40+0300\n"
 "Language: ru\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
 msgid "Bytes per upload request. The payload is streamed from /dev/zero and is not stored on flash."
-msgstr "Байт на один upload-запрос. Данные идут потоком из /dev/zero и не сохраняются во flash."
+msgstr "Байт на один исходящий запрос. Данные идут потоком из /dev/zero и не сохраняются во flash."
+
+msgid "Checking latency"
+msgstr "Проверка задержки"
+
+msgid "Current stage: %s"
+msgstr "Текущий этап: %s"
 
 msgid "Debug mode"
 msgstr "Режим отладки"
 
-msgid "Download"
-msgstr "Входящая"
-
 msgid "Download duration"
 msgstr "Длительность входящего теста"
+
+msgid "Download speed"
+msgstr "Входящая скорость"
+
+msgid "Elapsed: %s seconds"
+msgstr "Прошло: %s с"
 
 msgid "Enable upload test"
 msgstr "Включить исходящий тест"
 
+msgid "Finishing the test"
+msgstr "Завершение теста"
+
+msgid "Internetometer"
+msgstr "Интернетометр"
+
 msgid "Jitter"
 msgstr "Джиттер"
 
-msgid "Last run time"
-msgstr "Время последнего запуска"
+msgid "Last run"
+msgstr "Последний запуск"
+
+msgid "Latency"
+msgstr "Задержка"
 
 msgid "Mbps"
 msgstr "Мбит/с"
 
+msgid "Measuring download speed"
+msgstr "Измерение входящей скорости"
+
+msgid "Measuring upload speed"
+msgstr "Измерение исходящей скорости"
+
 msgid "Not available"
 msgstr "Нет данных"
 
-msgid "Ping"
-msgstr "Задержка"
-
-msgid "Probe count"
-msgstr "Количество probe-серверов"
+msgid "Probe servers"
+msgstr "Probe-серверы"
 
 msgid "Refresh status"
 msgstr "Обновить статус"
@@ -51,6 +72,9 @@ msgstr "Сервер"
 msgid "Settings"
 msgstr "Настройки"
 
+msgid "Speed test in progress"
+msgstr "Идёт тест скорости"
+
 msgid "Start test"
 msgstr "Запустить тест"
 
@@ -63,8 +87,8 @@ msgstr "Количество потоков"
 msgid "Streams"
 msgstr "Потоки"
 
-msgid "The speed test is running. Results will update automatically."
-msgstr "Тест скорости выполняется. Результаты обновятся автоматически."
+msgid "Switch application language"
+msgstr "Сменить язык приложения"
 
 msgid "Unable to execute backend command"
 msgstr "Не удалось выполнить backend-команду"
@@ -72,14 +96,14 @@ msgstr "Не удалось выполнить backend-команду"
 msgid "Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software."
 msgstr "Неофициальный совместимый с Яндекс Интернетометром тест скорости через probe-серверы Яндекса. Это не официальное ПО Яндекса."
 
-msgid "Upload"
-msgstr "Исходящая"
-
 msgid "Upload duration"
 msgstr "Длительность исходящего теста"
 
 msgid "Upload payload size"
-msgstr "Размер upload-payload"
+msgstr "Размер исходящего payload"
+
+msgid "Upload speed"
+msgstr "Исходящая скорость"
 
 msgid "Yandex Internetometer"
 msgstr "Яндекс Интернетометр"

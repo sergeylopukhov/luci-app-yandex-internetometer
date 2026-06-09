@@ -8,6 +8,14 @@ Hotfix `0.0.1-r2`:
 - added package install/remove scripts to clear LuCI menu cache and reload rpcd;
 - keeps project version `0.0.1`, package release is `r2`.
 
+Hotfix `0.0.1-r3`:
+
+- ships compiled LuCI Russian translation file;
+- uses `Интернетометр` as the Russian menu title;
+- adds animated progress and current-stage display while a test is running;
+- adds an in-app RU/EN language switch that does not change global LuCI language;
+- keeps project version `0.0.1`, package release is `r3`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
@@ -25,7 +33,7 @@ apk update
 apk add luci-app-yandex-internetometer
 ```
 
-For an already installed `0.0.1-r1` test build:
+For an already installed `0.0.1-r1` or `0.0.1-r2` test build:
 
 ```sh
 rm -f /var/cache/apk/*

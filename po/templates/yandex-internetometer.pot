@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: luci-app-yandex-internetometer\n"
-"POT-Creation-Date: 2026-06-09 12:00+0300\n"
+"POT-Creation-Date: 2026-06-09 14:40+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -12,34 +12,55 @@ msgstr ""
 msgid "Bytes per upload request. The payload is streamed from /dev/zero and is not stored on flash."
 msgstr ""
 
-msgid "Debug mode"
+msgid "Checking latency"
 msgstr ""
 
-msgid "Download"
+msgid "Current stage: %s"
+msgstr ""
+
+msgid "Debug mode"
 msgstr ""
 
 msgid "Download duration"
 msgstr ""
 
+msgid "Download speed"
+msgstr ""
+
+msgid "Elapsed: %s seconds"
+msgstr ""
+
 msgid "Enable upload test"
+msgstr ""
+
+msgid "Finishing the test"
+msgstr ""
+
+msgid "Internetometer"
 msgstr ""
 
 msgid "Jitter"
 msgstr ""
 
-msgid "Last run time"
+msgid "Last run"
+msgstr ""
+
+msgid "Latency"
 msgstr ""
 
 msgid "Mbps"
 msgstr ""
 
+msgid "Measuring download speed"
+msgstr ""
+
+msgid "Measuring upload speed"
+msgstr ""
+
 msgid "Not available"
 msgstr ""
 
-msgid "Ping"
-msgstr ""
-
-msgid "Probe count"
+msgid "Probe servers"
 msgstr ""
 
 msgid "Refresh status"
@@ -54,6 +75,9 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
+msgid "Speed test in progress"
+msgstr ""
+
 msgid "Start test"
 msgstr ""
 
@@ -66,7 +90,7 @@ msgstr ""
 msgid "Streams"
 msgstr ""
 
-msgid "The speed test is running. Results will update automatically."
+msgid "Switch application language"
 msgstr ""
 
 msgid "Unable to execute backend command"
@@ -75,13 +99,13 @@ msgstr ""
 msgid "Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software."
 msgstr ""
 
-msgid "Upload"
-msgstr ""
-
 msgid "Upload duration"
 msgstr ""
 
 msgid "Upload payload size"
+msgstr ""
+
+msgid "Upload speed"
 msgstr ""
 
 msgid "Yandex Internetometer"

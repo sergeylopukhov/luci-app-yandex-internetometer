@@ -1,6 +1,6 @@
 {
 	"admin/status/yandex-internetometer": {
-		"title": "Yandex Internetometer",
+		"title": "Internetometer",
 		"order": 90,
 		"action": {
 			"type": "view",

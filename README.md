@@ -6,7 +6,7 @@ LuCI-приложение и лёгкий CLI-backend для замера ско
 
 ## Что делает пакет
 
-- добавляет страницу LuCI: `Status -> Yandex Internetometer`;
+- добавляет страницу LuCI: `Status -> Internetometer`;
 - измеряет HTTP RTT, jitter, входящую и исходящую скорость;
 - получает список probe-серверов из `https://yandex.ru/internet/api/v0/get-probes`;
 - хранит временные файлы только в `/tmp/yandex-internetometer/`;
@@ -63,7 +63,7 @@ opkg remove luci-app-yandex-internetometer
 В LuCI:
 
 ```text
-Status -> Yandex Internetometer
+Status -> Internetometer
 ```
 
 CLI:
@@ -186,7 +186,7 @@ apk del luci-app-yandex-internetometer
 Open:
 
 ```text
-LuCI -> Status -> Yandex Internetometer
+LuCI -> Status -> Internetometer
 ```
 
 The page allows starting/stopping a test, viewing results, and saving settings:
@@ -197,6 +197,8 @@ The page allows starting/stopping a test, viewing results, and saving settings:
 - upload payload size
 - upload test enabled/disabled
 - debug mode
+
+The LuCI page has its own RU/EN language switch. It changes only this application, not the global LuCI language.
 
 LuCI calls only fixed wrapper scripts through rpcd ACL:
 
@@ -250,9 +252,9 @@ Result is lower than expected: router CPU, NAT offload settings, Wi-Fi, VPN, SQM
 
 Yandex endpoint changed: the backend returns an error such as `Yandex probe response has an unsupported structure`. Update the parser/endpoints.
 
-`jq was compiled without ONIGURUMA regex library`: upgrade to `0.0.1-r2` or newer. The backend no longer uses jq regex functions.
+`jq was compiled without ONIGURUMA regex library`: upgrade to `0.0.1-r3` or newer. The backend no longer uses jq regex functions.
 
-LuCI menu item is missing after install: upgrade to `0.0.1-r2` or newer. The package clears LuCI menu cache after installation. For an already installed old build, run:
+LuCI menu item is missing after install: upgrade to `0.0.1-r3` or newer. The package clears LuCI menu cache after installation. For an already installed old build, run:
 
 ```sh
 rm -f /tmp/luci-indexcache.*
