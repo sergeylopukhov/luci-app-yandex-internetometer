@@ -135,17 +135,13 @@ jobs:
             "$SDK/staging_dir/host/bin/apk" mkpkg \
               --info "name:$PKG_NAME" \
               --info "version:$PKG_VERSION" \
-              --info "arch:$arch" \
+              --info "arch:noarch" \
               --info "license:MIT" \
               --info "origin:$PKG_NAME" \
               --info "url:https://github.com/sergeylopukhov/luci-app-yandex-internetometer" \
               --info "maintainer:Sergey Lopukhov" \
               --info "description:LuCI app for unofficial Yandex Internetometer-compatible speed tests" \
-              --info "depends:luci-base" \
-              --info "depends:curl" \
-              --info "depends:rpcd" \
-              --info "depends:uci" \
-              --info "depends:jq" \
+              --info "depends:libc luci-base curl rpcd uci jq" \
               --files "$PKGROOT" \
               --sign "$SDK/private-key.pem" \
               --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk"
