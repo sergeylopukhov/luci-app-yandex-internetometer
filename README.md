@@ -2,213 +2,109 @@
 
 LuCI-приложение и лёгкий CLI-backend для замера скорости интернета на OpenWrt через probe-серверы Яндекс Интернетометра.
 
-Это неофициальная совместимая реализация. Это не ПО Яндекса и не официальный SDK. Пакет не использует VPS, Ookla, speedtest.net, Python, Node.js, npm или bash на роутере.
+Это неофициальная совместимая реализация. Пакет не относится к Яндексу, не использует официальный SDK и не должен восприниматься как официальное ПО Яндекса.
 
 ## Что делает пакет
 
-- добавляет страницу LuCI: `Status -> Internetometer`;
+- добавляет страницу LuCI: `Status -> Internetometer`, в русской локали — «Интернетометр»;
 - измеряет HTTP RTT, jitter, входящую и исходящую скорость;
 - получает список probe-серверов из `https://yandex.ru/internet/api/v0/get-probes`;
+- показывает тест в веб-интерфейсе: этап, прогресс, итоговую скорость и параметры сервера;
 - хранит временные файлы только в `/tmp/yandex-internetometer/`;
 - генерирует upload-payload потоком из `/dev/zero`, без записи больших файлов во flash;
 - отдаёт результат в JSON для CLI и LuCI.
 
-## Установка из релиза
+Пакету не нужны VPS, Ookla, speedtest.net, Python, Node.js, npm или bash на роутере.
 
-Для OpenWrt с `apk` лучше использовать репозиторий пакета. LuCI должен быть уже установлен на роутере.
+## Важное про проверку
 
-```sh
-curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
-  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
+Установка и обновление пакета проверялись только на OpenWrt с `apk`.
 
-ARCH="$(apk --print-arch)"
-echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" > \
-  /etc/apk/repositories.d/yandex-internetometer.list
+IPK для legacy `opkg` собирается и установщик умеет его скачать, но эта ветка не проходила полноценную проверку на реальном opkg-роутере.
 
-apk update
-apk add luci-app-yandex-internetometer
-```
+## Быстрая установка и обновление
 
-Если ранее был добавлен старый тестовый репозиторий и установка падала с `ADB integrity error`, перезапишите ключ и список репозитория командами выше, затем выполните:
+Одна команда ставит пакет. Повторный запуск этой же команды обновляет пакет, если вышла новая версия.
 
 ```sh
-rm -f /var/cache/apk/*
-apk update
-apk upgrade luci-app-yandex-internetometer
+curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh
 ```
 
-Для OpenWrt 24.10.x с legacy `opkg` используйте `.ipk`:
+Если на роутере нет `curl`, используйте `wget`:
 
 ```sh
-cd /tmp
-curl -L -o luci-app-yandex-internetometer.ipk \
-  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
-opkg install ./luci-app-yandex-internetometer.ipk
+wget -O - https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh
 ```
 
-Удаление:
+Установщик:
 
-```sh
-apk del luci-app-yandex-internetometer
-```
+- проверяет, запущен ли он от `root`;
+- выбирает `apk`, если он есть;
+- если `apk` не найден, пробует `opkg`;
+- для `apk` добавляет ключ и репозиторий пакета, затем ставит или обновляет приложение;
+- для `opkg` скачивает IPK из GitHub Release и запускает `opkg install`;
+- очищает кеш меню LuCI и перезагружает `rpcd`.
 
-Для legacy `opkg`:
-
-```sh
-opkg remove luci-app-yandex-internetometer
-```
-
-## Использование
-
-В LuCI:
-
-```text
-Status -> Internetometer
-```
-
-CLI:
-
-```sh
-yandex-internetometer run --json
-yandex-internetometer run --streams 3 --download-time 10 --upload-time 10 --upload-size 12000000
-yandex-internetometer start
-yandex-internetometer status
-yandex-internetometer stop
-```
-
-## Сборка в OpenWrt SDK/buildroot
-
-```sh
-cp -a luci-app-yandex-internetometer /path/to/openwrt/package/
-cd /path/to/openwrt
-./scripts/feeds update -a
-./scripts/feeds install -a
-make menuconfig
-make package/luci-app-yandex-internetometer/compile V=s
-```
-
-В `menuconfig` выберите:
-
-```text
-LuCI -> Applications -> luci-app-yandex-internetometer
-```
-
-На apk-based OpenWrt targets итоговый файл будет `.apk`.
-
-## English
-
-LuCI application and lightweight CLI backend for an unofficial Yandex Internetometer-compatible speed test on OpenWrt routers.
-
-This is not official Yandex software. It uses Yandex Internetometer-style probe endpoints and fetches probe information from:
-
-```sh
-https://yandex.ru/internet/api/v0/get-probes
-```
-
-No VPS, Ookla, speedtest.net, Python, Node.js, npm, or bash is required on the router.
-
-## Runtime dependencies
-
-- BusyBox-compatible `/bin/ash`
-- `curl`
-- `jq`
-- working LuCI installation
-
-`jq` is intentionally used to parse Yandex probe JSON safely. If Yandex changes the response structure, the backend returns a clean JSON error.
-
-## Build with OpenWrt SDK/buildroot
-
-Most users should install from the GitHub release. Use SDK/buildroot only if you need to rebuild the package.
-
-For apk-based OpenWrt:
-
-```sh
-curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
-  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
-
-ARCH="$(apk --print-arch)"
-echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" > \
-  /etc/apk/repositories.d/yandex-internetometer.list
-
-apk update
-apk add luci-app-yandex-internetometer
-```
-
-Upgrade after an earlier test build:
-
-```sh
-rm -f /var/cache/apk/*
-apk update
-apk upgrade luci-app-yandex-internetometer
-```
-
-For OpenWrt 24.10.x legacy opkg:
-
-```sh
-cd /tmp
-curl -L -o luci-app-yandex-internetometer.ipk \
-  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
-opkg install ./luci-app-yandex-internetometer.ipk
-```
-
-To build manually, place this package in a package feed or directly under `package/`:
-
-```sh
-cp -a luci-app-yandex-internetometer /path/to/openwrt/package/
-cd /path/to/openwrt
-./scripts/feeds update -a
-./scripts/feeds install -a
-make menuconfig
-```
-
-Select:
-
-```text
-LuCI -> Applications -> luci-app-yandex-internetometer
-```
-
-Build:
-
-```sh
-make package/luci-app-yandex-internetometer/compile V=s
-```
-
-On apk-based OpenWrt targets, the buildroot/SDK produces an `.apk` package under `bin/packages/.../luci/` or the matching package output directory.
-
-## Uninstall
-
-```sh
-apk del luci-app-yandex-internetometer
-```
-
-## LuCI
-
-Open:
+После установки откройте:
 
 ```text
 LuCI -> Status -> Internetometer
 ```
 
-The page allows starting/stopping a test, viewing results, and saving settings:
+В русской локали пункт меню называется «Интернетометр».
 
-- stream count
-- download duration
-- upload duration
-- upload payload size
-- upload test enabled/disabled
-- debug mode
+## Ручная установка через apk
 
-The LuCI page has its own RU/EN language switch. It changes only this application, not the global LuCI language.
+Рекомендуемый способ для apk-based OpenWrt:
 
-LuCI calls only fixed wrapper scripts through rpcd ACL:
+```sh
+curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
 
-- `/usr/libexec/yandex-internetometer/start`
-- `/usr/libexec/yandex-internetometer/status`
-- `/usr/libexec/yandex-internetometer/stop`
+ARCH="$(apk --print-arch)"
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" > \
+  /etc/apk/repositories.d/yandex-internetometer.list
 
-No arbitrary command execution is granted.
+rm -f /var/cache/apk/*
+apk update
+apk add luci-app-yandex-internetometer
+```
 
-## CLI usage
+Обновление:
+
+```sh
+rm -f /var/cache/apk/*
+apk update
+apk upgrade luci-app-yandex-internetometer
+```
+
+## Ручная установка через opkg
+
+Этот вариант предназначен для OpenWrt 24.10.x с legacy `opkg`. Он собран, но не проверялся так же полно, как APK-вариант.
+
+```sh
+cd /tmp
+curl -fL -o luci-app-yandex-internetometer.ipk \
+  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
+opkg update
+opkg install ./luci-app-yandex-internetometer.ipk
+```
+
+## Удаление
+
+Для `apk`:
+
+```sh
+apk del luci-app-yandex-internetometer
+```
+
+Для `opkg`:
+
+```sh
+opkg remove luci-app-yandex-internetometer
+```
+
+## Использование CLI
 
 ```sh
 yandex-internetometer run
@@ -220,7 +116,7 @@ yandex-internetometer status
 yandex-internetometer stop
 ```
 
-Example JSON:
+Пример JSON:
 
 ```json
 {
@@ -234,36 +130,93 @@ Example JSON:
   "streams": 3,
   "download_time": 10,
   "upload_time": 10,
+  "upload_enabled": 1,
   "probe_count": 9,
   "server": "cloudcdn-example.cdn.yandex.net",
   "error": null
 }
 ```
 
-## Troubleshooting
+## Настройки
 
-No probe servers: check router DNS, TLS certificates, and access to `https://yandex.ru/internet/api/v0/get-probes`.
+В LuCI можно изменить:
 
-curl TLS failure: install/update CA certificates for your OpenWrt image if your curl build validates certificates.
+- количество потоков;
+- длительность входящего теста;
+- длительность исходящего теста;
+- размер upload-payload;
+- включение или отключение исходящего теста;
+- debug-режим.
 
-Router CPU too weak: reduce stream count, download duration, upload duration, or upload payload size.
+Русский язык включён по умолчанию внутри приложения. Кнопка `English` переключает только это приложение и не меняет глобальный язык LuCI.
 
-Result is lower than expected: router CPU, NAT offload settings, Wi-Fi, VPN, SQM, and concurrent traffic can limit measured speed.
+## Как LuCI вызывает backend
 
-Yandex endpoint changed: the backend returns an error such as `Yandex probe response has an unsupported structure`. Update the parser/endpoints.
+Страница LuCI не получает произвольный shell-доступ. Через ACL разрешены только фиксированные wrapper-скрипты:
 
-`jq was compiled without ONIGURUMA regex library`: upgrade to `0.0.1-r5` or newer. The backend no longer uses jq regex functions.
+- `/usr/libexec/yandex-internetometer/start`;
+- `/usr/libexec/yandex-internetometer/status`;
+- `/usr/libexec/yandex-internetometer/stop`.
 
-LuCI menu item is missing after install: upgrade to `0.0.1-r5` or newer. The package clears LuCI menu cache after installation. For an already installed old build, run:
+Основная CLI-команда находится в `/usr/bin/yandex-internetometer`.
+
+## Зависимости
+
+На роутере нужны:
+
+- BusyBox-совместимый `/bin/ash`;
+- `curl`;
+- `jq`;
+- установленный LuCI.
+
+`jq` используется для безопасного разбора JSON от Yandex probe endpoint. Если структура ответа изменится, backend вернёт чистую JSON-ошибку.
+
+## Сборка в OpenWrt SDK/buildroot
+
+```sh
+cp -a luci-app-yandex-internetometer /path/to/openwrt/package/
+cd /path/to/openwrt
+./scripts/feeds update -a
+./scripts/feeds install -a
+make menuconfig
+```
+
+В `menuconfig` выберите:
+
+```text
+LuCI -> Applications -> luci-app-yandex-internetometer
+```
+
+Сборка:
+
+```sh
+make package/luci-app-yandex-internetometer/compile V=s
+```
+
+На apk-based target OpenWrt SDK/buildroot создаст `.apk` в каталоге `bin/packages/...`.
+
+## Диагностика
+
+Нет probe-серверов: проверьте DNS, TLS-сертификаты и доступ к `https://yandex.ru/internet/api/v0/get-probes`.
+
+Ошибка TLS в `curl`: установите или обновите CA-сертификаты в вашей сборке OpenWrt.
+
+Роутер слабый по CPU: уменьшите количество потоков, длительность теста или размер upload-payload.
+
+Результат ниже ожидаемого: на скорость влияют CPU роутера, NAT offload, Wi-Fi, VPN, SQM и параллельный трафик.
+
+Yandex endpoint изменился: backend вернёт ошибку вроде `Yandex probe response has an unsupported structure`. В этом случае нужно обновить parser или endpoints.
+
+Пункт меню не появился:
 
 ```sh
 rm -f /tmp/luci-indexcache.*
 /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart
 ```
 
-Then refresh LuCI or log out and log in again.
+После обновления JS-интерфейса сделайте жёсткое обновление страницы LuCI в браузере.
 
-`ADB integrity error` during `apk add`: refresh the package key and clear the local apk cache:
+Ошибка `ADB integrity error` при `apk add`: обновите ключ и очистите кеш:
 
 ```sh
 curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
@@ -273,12 +226,12 @@ apk update
 apk add luci-app-yandex-internetometer
 ```
 
-## Security and privacy
+## Безопасность и приватность
 
-The test contacts Yandex probe, upload, download, and latency endpoints needed for the measurement. It does not use third-party IP/geolocation services and does not send data to Ookla, speedtest.net, a VPS, or analytics services.
+Тест обращается только к Yandex probe, upload, download и latency endpoints, нужным для замера. Пакет не использует сторонние IP/geolocation-сервисы, аналитику, VPS, Ookla или speedtest.net.
 
-Runtime state is stored in `/tmp/yandex-internetometer/`. Large upload/download payloads are never written to flash. Upload data is streamed from `/dev/zero`.
+Runtime-состояние хранится в `/tmp/yandex-internetometer/`. Большие upload/download payloads не пишутся во flash. Upload-данные идут потоком из `/dev/zero`.
 
-## Manual testing
+## Ручная проверка
 
-See `TESTING.md`.
+Сценарии проверки описаны в `TESTING.md`.

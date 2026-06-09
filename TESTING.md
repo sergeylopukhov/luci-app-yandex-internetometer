@@ -1,7 +1,15 @@
 # Manual testing
 
 1. Build the package with an apk-based OpenWrt SDK/buildroot.
-2. Install it on the router from the APK repository:
+2. Install it on the router with the universal installer:
+
+```sh
+curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh
+```
+
+Run the same command again and confirm it upgrades or keeps the current package without breaking the installation.
+
+3. Install it manually on an apk-based router from the APK repository:
 
 ```sh
 curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
@@ -14,7 +22,7 @@ apk update
 apk add luci-app-yandex-internetometer
 ```
 
-3. Confirm CLI JSON output:
+4. Confirm CLI JSON output:
 
 ```sh
 yandex-internetometer run --json
@@ -26,7 +34,7 @@ Confirm there is no jq regex error such as:
 jq was compiled without ONIGURUMA regex library
 ```
 
-4. Confirm the LuCI menu item appears under:
+5. Confirm the LuCI menu item appears under:
 
 ```text
 Status -> Internetometer
@@ -39,14 +47,15 @@ rm -f /tmp/luci-indexcache.*
 /etc/init.d/rpcd reload 2>/dev/null || /etc/init.d/rpcd restart
 ```
 
-5. Start a test from LuCI and confirm the running indicator appears.
-6. Confirm animated progress and current stage update while the test is running.
-7. Confirm result cards update after the test finishes.
-8. Use the page language button and confirm only this app switches between Russian and English.
-9. Switch LuCI language to Russian and confirm Russian menu title `Интернетометр`.
-10. Switch LuCI language to English and confirm English menu title `Internetometer`.
-11. Simulate endpoint failure by blocking `yandex.ru` or Yandex CDN DNS and confirm the backend returns clean JSON with `ok=false`.
-12. Start two tests at once:
+6. Open the app for the first time and confirm Russian is selected by default.
+7. Start a test from LuCI and confirm the running indicator appears.
+8. Confirm animated progress and current stage update while the test is running.
+9. Confirm result cards update after the test finishes.
+10. Use the page language button and confirm only this app switches between Russian and English.
+11. Switch LuCI language to Russian and confirm Russian menu title `Интернетометр`.
+12. Switch LuCI language to English and confirm English menu title `Internetometer`.
+13. Simulate endpoint failure by blocking `yandex.ru` or Yandex CDN DNS and confirm the backend returns clean JSON with `ok=false`.
+14. Start two tests at once:
 
 ```sh
 yandex-internetometer start
@@ -55,7 +64,7 @@ yandex-internetometer run --json
 
 Confirm the second command reports `running=true` instead of starting another measurement.
 
-13. Reboot the router and confirm no stale running state remains:
+15. Reboot the router and confirm no stale running state remains:
 
 ```sh
 yandex-internetometer status

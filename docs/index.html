@@ -109,17 +109,24 @@
 		<p class="lead">LuCI-приложение и лёгкий CLI-backend для замера скорости интернета на OpenWrt через probe-серверы Яндекс Интернетометра.</p>
 
 		<div class="notice">
-			Это неофициальная совместимая реализация. Это не ПО Яндекса и не официальный SDK.
+			Это неофициальная совместимая реализация. Это не ПО Яндекса и не официальный SDK. Установка проверялась только на OpenWrt с <code>apk</code>.
 		</div>
 
 		<div class="actions">
 			<a class="primary" href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer">Открыть репозиторий</a>
-			<a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/blob/main/README.md">Инструкция</a>
+			<a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/tag/v0.0.1">Релиз</a>
 		</div>
 
+		<h2>Установка и обновление</h2>
+		<p>Одна команда ставит пакет. Повторный запуск этой же команды обновляет пакет, если вышла новая версия.</p>
+		<pre><code>curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh</code></pre>
+
+		<p>Если на роутере нет <code>curl</code>:</p>
+		<pre><code>wget -O - https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh</code></pre>
+
 		<h2>Что это</h2>
-		<p>Пакет добавляет в OpenWrt страницу <code>Status -> Internetometer</code> и команду <code>yandex-internetometer</code>. Тест измеряет HTTP RTT, jitter, входящую и исходящую скорость.</p>
-		<p>Внутри страницы есть отдельная кнопка RU/EN. Она меняет только язык этого приложения, не глобальный язык LuCI.</p>
+		<p>Пакет добавляет в OpenWrt страницу <code>Status -> Internetometer</code>. В русской локали пункт меню называется «Интернетометр». Тест измеряет HTTP RTT, jitter, входящую и исходящую скорость.</p>
+		<p>Русский язык включён в приложении по умолчанию. Кнопка <code>English</code> меняет только язык этого приложения, не глобальный язык LuCI.</p>
 
 		<h2>Что не требуется</h2>
 		<ul>
@@ -127,33 +134,6 @@
 			<li>Ookla или speedtest.net;</li>
 			<li>Python, Node.js, npm или bash на роутере.</li>
 		</ul>
-
-		<h2>Установка через APK-репозиторий</h2>
-		<p>Для OpenWrt с <code>apk</code>. LuCI должен быть уже установлен на роутере:</p>
-		<pre><code>curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \
-  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
-
-ARCH="$(apk --print-arch)"
-echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" &gt; \
-  /etc/apk/repositories.d/yandex-internetometer.list
-
-apk update
-apk add luci-app-yandex-internetometer</code></pre>
-
-		<p>Если уже была установлена старая тестовая сборка:</p>
-		<pre><code>rm -f /var/cache/apk/*
-apk update
-apk upgrade luci-app-yandex-internetometer</code></pre>
-
-		<p>Если пункт меню не появился сразу:</p>
-		<pre><code>rm -f /tmp/luci-indexcache.*
-/etc/init.d/rpcd reload 2&gt;/dev/null || /etc/init.d/rpcd restart</code></pre>
-
-		<p>Для OpenWrt 24.10.x с legacy <code>opkg</code>:</p>
-		<pre><code>cd /tmp
-curl -L -o luci-app-yandex-internetometer.ipk \
-  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
-opkg install ./luci-app-yandex-internetometer.ipk</code></pre>
 
 		<h2>CLI</h2>
 		<pre><code>yandex-internetometer run --json

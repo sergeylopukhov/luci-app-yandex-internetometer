@@ -30,12 +30,28 @@ Hotfix `0.0.1-r5`:
 - keeps the UI visually similar to a speed tester without cloning Yandex or Ookla branding;
 - keeps project version `0.0.1`, package release is `r5`.
 
+Hotfix `0.0.1-r6`:
+
+- adds a universal installer at `https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh`;
+- installer detects `apk` or `opkg` and installs or upgrades the package;
+- uses Russian as the default language inside the LuCI application;
+- documents that package installation was tested only on apk-based OpenWrt;
+- keeps project version `0.0.1`, package release is `r6`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
 - `luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk` for OpenWrt 24.10.x legacy opkg systems.
 
-Recommended apk installation uses the GitHub Pages repository:
+Recommended installation uses the universal installer:
+
+```sh
+curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh
+```
+
+The same command can be used again to upgrade the package.
+
+Manual apk installation uses the GitHub Pages repository:
 
 ```sh
 curl -fL -o /etc/apk/keys/yandex-internetometer.rsa.pub \

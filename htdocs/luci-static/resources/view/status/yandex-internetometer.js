@@ -56,20 +56,7 @@ var translations = {
 		'ms': 'мс'
 	}
 };
-var appLanguage = readStoredLanguage() || detectSystemLanguage();
-
-function detectSystemLanguage() {
-	var language = '';
-
-	if (typeof L !== 'undefined' && L.env && L.env.lang)
-		language = L.env.lang;
-	else if (document.documentElement && document.documentElement.lang)
-		language = document.documentElement.lang;
-	else if (navigator.language)
-		language = navigator.language;
-
-	return String(language).toLowerCase().indexOf('ru') === 0 ? 'ru' : 'en';
-}
+var appLanguage = readStoredLanguage() || 'ru';
 
 function readStoredLanguage() {
 	try {
