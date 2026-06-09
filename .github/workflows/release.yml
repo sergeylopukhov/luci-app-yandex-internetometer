@@ -84,10 +84,13 @@ jobs:
             openssl genrsa -out "$SDK/private-key.pem" 2048
           fi
           ARCHES="
+          aarch64
           aarch64_cortex-a53
           aarch64_cortex-a72
           aarch64_cortex-a76
           aarch64_generic
+          armhf
+          armv7
           arm_arm1176jzf-s_vfp
           arm_arm926ej-s
           arm_cortex-a15_neon-vfpv4
@@ -102,8 +105,13 @@ jobs:
           arm_fa526
           arm_xscale
           armeb_xscale
+          x86
           i386_pentium-mmx
           i386_pentium4
+          mips
+          mipsel
+          mips64
+          mips64el
           mips64_mips64r2
           mips64_octeonplus
           mips64el_mips64r2
@@ -117,6 +125,8 @@ jobs:
           powerpc64_e5500
           powerpc_464fp
           powerpc_8548
+          ppc64le
+          riscv64
           riscv64_generic
           riscv64_riscv64
           x86_64

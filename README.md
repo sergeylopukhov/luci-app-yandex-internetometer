@@ -22,6 +22,7 @@ cd /tmp
 ARCH="$(apk --print-arch)"
 curl -L -o luci-app-yandex-internetometer.apk \
   "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
+test "$(wc -c < luci-app-yandex-internetometer.apk)" -gt 1000
 apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
 ```
 
@@ -117,6 +118,7 @@ cd /tmp
 ARCH="$(apk --print-arch)"
 curl -L -o luci-app-yandex-internetometer.apk \
   "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
+test "$(wc -c < luci-app-yandex-internetometer.apk)" -gt 1000
 apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
 ```
 
