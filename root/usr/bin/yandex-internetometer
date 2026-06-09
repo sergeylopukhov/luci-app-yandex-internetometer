@@ -20,6 +20,7 @@ DEBUG="0"
 JSON_MODE="0"
 PROGRESS_PHASE=""
 UPLOAD_REQUEST_MAX_TIME="10"
+LATENCY_SAMPLES="10"
 
 usage() {
 	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1]"
@@ -274,7 +275,7 @@ measure_latency() {
 	latency_urls | while IFS= read -r url; do
 		[ -n "$url" ] || continue
 		i="0"
-		while [ "$i" -lt 3 ]; do
+		while [ "$i" -lt "$LATENCY_SAMPLES" ]; do
 			curl -fsS -o /dev/null \
 				--connect-timeout 3 \
 				--max-time 5 \

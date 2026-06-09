@@ -69,6 +69,7 @@ Hotfix `0.0.1-r11`:
 
 - replaces the generic circular gauge with a Yandex Internetometer-like oval tick scale;
 - shows download, upload, and latency as three large centered metrics inside the scale;
+- measures latency with 10 HTTP RTT samples and uses their average for ping;
 - keeps project version `0.0.1`, package release is `r11`.
 
 Assets:
