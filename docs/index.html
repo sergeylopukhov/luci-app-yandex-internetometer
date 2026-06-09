@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>luci-app-yandex-internetometer</title>
+	<style>
+		:root {
+			color-scheme: light dark;
+			--bg: #f7f7f4;
+			--text: #202124;
+			--muted: #5c625f;
+			--line: #d9ddd7;
+			--accent: #d8342a;
+			--code: #ecefe9;
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--bg: #171918;
+				--text: #ecefeb;
+				--muted: #aeb5af;
+				--line: #333833;
+				--accent: #ff6b5f;
+				--code: #242824;
+			}
+		}
+		* {
+			box-sizing: border-box;
+		}
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--text);
+			font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+		}
+		main {
+			max-width: 920px;
+			margin: 0 auto;
+			padding: 48px 20px 64px;
+		}
+		h1 {
+			margin: 0 0 12px;
+			font-size: clamp(32px, 5vw, 54px);
+			line-height: 1.05;
+			letter-spacing: 0;
+		}
+		h2 {
+			margin: 34px 0 10px;
+			font-size: 24px;
+		}
+		p {
+			max-width: 72ch;
+		}
+		a {
+			color: var(--accent);
+		}
+		.lead {
+			font-size: 20px;
+			color: var(--muted);
+		}
+		.notice {
+			border: 1px solid var(--line);
+			padding: 14px 16px;
+			margin: 22px 0;
+			background: color-mix(in srgb, var(--accent) 8%, transparent);
+		}
+		code, pre {
+			background: var(--code);
+		}
+		code {
+			padding: 2px 5px;
+			border-radius: 4px;
+		}
+		pre {
+			overflow-x: auto;
+			padding: 14px 16px;
+			border-radius: 6px;
+			border: 1px solid var(--line);
+		}
+		.actions {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+			margin-top: 24px;
+		}
+		.actions a {
+			display: inline-flex;
+			align-items: center;
+			min-height: 40px;
+			padding: 8px 14px;
+			border: 1px solid var(--line);
+			border-radius: 6px;
+			text-decoration: none;
+			color: var(--text);
+		}
+		.actions a.primary {
+			border-color: var(--accent);
+			background: var(--accent);
+			color: #fff;
+		}
+		ul {
+			padding-left: 22px;
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<h1>luci-app-yandex-internetometer</h1>
+		<p class="lead">LuCI-приложение и лёгкий CLI-backend для замера скорости интернета на OpenWrt через probe-серверы Яндекс Интернетометра.</p>
+
+		<div class="notice">
+			Это неофициальная совместимая реализация. Это не ПО Яндекса и не официальный SDK.
+		</div>
+
+		<div class="actions">
+			<a class="primary" href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer">Открыть репозиторий</a>
+			<a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/blob/main/README.md">Инструкция</a>
+		</div>
+
+		<h2>Что это</h2>
+		<p>Пакет добавляет в OpenWrt страницу <code>Status -> Yandex Internetometer</code> и команду <code>yandex-internetometer</code>. Тест измеряет HTTP RTT, jitter, входящую и исходящую скорость.</p>
+
+		<h2>Что не требуется</h2>
+		<ul>
+			<li>VPS;</li>
+			<li>Ookla или speedtest.net;</li>
+			<li>Python, Node.js, npm или bash на роутере.</li>
+		</ul>
+
+		<h2>Установка</h2>
+		<p>Соберите пакет в OpenWrt SDK/buildroot для apk-based target, скопируйте файл на роутер и установите:</p>
+		<pre><code>apk add --allow-untrusted ./luci-app-yandex-internetometer-*.apk</code></pre>
+
+		<h2>CLI</h2>
+		<pre><code>yandex-internetometer run --json
+yandex-internetometer start
+yandex-internetometer status
+yandex-internetometer stop</code></pre>
+
+		<h2>Приватность</h2>
+		<p>Тест обращается только к probe, upload, download и latency endpoints Яндекса, нужным для измерения. Большие файлы во flash не пишутся, временное состояние хранится в <code>/tmp/yandex-internetometer/</code>.</p>
+	</main>
+</body>
+</html>
