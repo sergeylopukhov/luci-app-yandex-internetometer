@@ -127,9 +127,18 @@
 			<li>Python, Node.js, npm или bash на роутере.</li>
 		</ul>
 
-		<h2>Установка</h2>
-		<p>Соберите пакет в OpenWrt SDK/buildroot для apk-based target, скопируйте файл на роутер и установите:</p>
-		<pre><code>apk add --allow-untrusted ./luci-app-yandex-internetometer-*.apk</code></pre>
+		<h2>Установка из релиза</h2>
+		<p>Для OpenWrt с <code>apk</code>:</p>
+		<pre><code>cd /tmp
+curl -L -o luci-app-yandex-internetometer.apk \
+  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk
+apk add --allow-untrusted ./luci-app-yandex-internetometer.apk</code></pre>
+
+		<p>Для OpenWrt 24.10.x с legacy <code>opkg</code>:</p>
+		<pre><code>cd /tmp
+curl -L -o luci-app-yandex-internetometer.ipk \
+  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
+opkg install ./luci-app-yandex-internetometer.ipk</code></pre>
 
 		<h2>CLI</h2>
 		<pre><code>yandex-internetometer run --json

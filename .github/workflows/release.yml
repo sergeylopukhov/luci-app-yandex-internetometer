@@ -1,0 +1,96 @@
+name: Build release packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.kind }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - kind: apk
+            sdk_url: https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+            asset_name: luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk
+            extension: apk
+          - kind: ipk
+            sdk_url: https://downloads.openwrt.org/releases/24.10.2/targets/x86/64/openwrt-sdk-24.10.2-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+            asset_name: luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
+            extension: ipk
+
+    steps:
+      - name: Checkout package
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential clang flex bison g++ gawk gcc-multilib gettext \
+            git libncurses-dev libssl-dev python3 rsync unzip zlib1g-dev \
+            file wget xz-utils zstd
+
+      - name: Download OpenWrt SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/sdk"
+          wget -O "$RUNNER_TEMP/sdk.tar.zst" "${{ matrix.sdk_url }}"
+          tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
+
+      - name: Prepare package in SDK
+        run: |
+          cd "$RUNNER_TEMP/sdk"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          mkdir -p package/luci-app-yandex-internetometer
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            "$GITHUB_WORKSPACE"/ package/luci-app-yandex-internetometer/
+          make defconfig
+
+      - name: Build package
+        run: |
+          cd "$RUNNER_TEMP/sdk"
+          make package/luci-app-yandex-internetometer/compile V=s
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          found="$(find bin/packages -type f -name 'luci-app-yandex-internetometer*.${{ matrix.extension }}' | head -n 1)"
+          test -n "$found"
+          cp "$found" "$GITHUB_WORKSPACE/dist/${{ matrix.asset_name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.kind }}-package
+          path: dist/${{ matrix.asset_name }}
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download built packages
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "luci-app-yandex-internetometer $GITHUB_REF_NAME" \
+            --notes-file RELEASE_NOTES.md \
+            --latest

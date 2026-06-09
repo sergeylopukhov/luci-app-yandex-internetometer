@@ -13,18 +13,36 @@ LuCI-приложение и лёгкий CLI-backend для замера ско
 - генерирует upload-payload потоком из `/dev/zero`, без записи больших файлов во flash;
 - отдаёт результат в JSON для CLI и LuCI.
 
-## Установка на OpenWrt с apk
+## Установка из релиза
 
-Соберите пакет в OpenWrt SDK/buildroot для apk-based target, скопируйте `.apk` на роутер и установите:
+Для OpenWrt с `apk` скачайте `.apk` из релиза `v0.0.1` и установите:
 
 ```sh
-apk add --allow-untrusted ./luci-app-yandex-internetometer-*.apk
+cd /tmp
+curl -L -o luci-app-yandex-internetometer.apk \
+  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk
+apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
+```
+
+Для OpenWrt 24.10.x с legacy `opkg` используйте `.ipk`:
+
+```sh
+cd /tmp
+curl -L -o luci-app-yandex-internetometer.ipk \
+  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
+opkg install ./luci-app-yandex-internetometer.ipk
 ```
 
 Удаление:
 
 ```sh
 apk del luci-app-yandex-internetometer
+```
+
+Для legacy `opkg`:
+
+```sh
+opkg remove luci-app-yandex-internetometer
 ```
 
 ## Использование
@@ -89,7 +107,27 @@ No VPS, Ookla, speedtest.net, Python, Node.js, npm, or bash is required on the r
 
 ## Build with OpenWrt SDK/buildroot
 
-Place this package in a package feed or directly under `package/`:
+Most users should install from the GitHub release. Use SDK/buildroot only if you need to rebuild the package.
+
+For apk-based OpenWrt:
+
+```sh
+cd /tmp
+curl -L -o luci-app-yandex-internetometer.apk \
+  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk
+apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
+```
+
+For OpenWrt 24.10.x legacy opkg:
+
+```sh
+cd /tmp
+curl -L -o luci-app-yandex-internetometer.ipk \
+  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk
+opkg install ./luci-app-yandex-internetometer.ipk
+```
+
+To build manually, place this package in a package feed or directly under `package/`:
 
 ```sh
 cp -a luci-app-yandex-internetometer /path/to/openwrt/package/
