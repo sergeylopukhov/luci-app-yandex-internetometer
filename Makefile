@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-yandex-internetometer
 PKG_VERSION:=0.0.1
-PKG_RELEASE:=9
+PKG_RELEASE:=10
 
 PKG_MAINTAINER:=OpenWrt community
 PKG_LICENSE:=MIT
@@ -19,8 +19,12 @@ if command -v uci >/dev/null 2>&1; then
 	streams="$$(uci -q get yandex-internetometer.main.streams 2>/dev/null || true)"
 	if [ -z "$$streams" ] || [ "$$streams" = "3" ]; then
 		uci -q set yandex-internetometer.main.streams='8' 2>/dev/null || true
-		uci -q commit yandex-internetometer 2>/dev/null || true
 	fi
+	upload_size="$$(uci -q get yandex-internetometer.main.upload_size 2>/dev/null || true)"
+	if [ -z "$$upload_size" ] || [ "$$upload_size" = "12000000" ]; then
+		uci -q set yandex-internetometer.main.upload_size='30720000' 2>/dev/null || true
+	fi
+	uci -q commit yandex-internetometer 2>/dev/null || true
 fi
 [ -x /etc/init.d/rpcd ] && /etc/init.d/rpcd reload >/dev/null 2>&1 || true
 exit 0

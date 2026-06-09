@@ -57,6 +57,14 @@ Hotfix `0.0.1-r9`:
 - makes the universal installer use `apk add --upgrade` for already installed apk packages;
 - keeps project version `0.0.1`, package release is `r9`.
 
+Hotfix `0.0.1-r10`:
+
+- increases the default upload payload to `30720000` bytes to reduce per-request overhead on routers;
+- lets upload requests run for up to 10 seconds, capped by remaining test time, instead of hard-stopping every POST after 2 seconds;
+- reduces shell overhead during speed tests by selecting each worker's probe URL once instead of spawning `sed` for every request;
+- refreshes the LuCI speed-test page with a more minimal Yandex Internetometer-like dark layout and smoother gauge/status animations;
+- keeps project version `0.0.1`, package release is `r10`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.

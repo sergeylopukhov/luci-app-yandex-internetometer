@@ -14,11 +14,12 @@ USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari
 STREAMS="8"
 DOWNLOAD_TIME="10"
 UPLOAD_TIME="10"
-UPLOAD_SIZE="12000000"
+UPLOAD_SIZE="30720000"
 UPLOAD_ENABLED="1"
 DEBUG="0"
 JSON_MODE="0"
 PROGRESS_PHASE=""
+UPLOAD_REQUEST_MAX_TIME="10"
 
 usage() {
 	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1]"
@@ -307,10 +308,9 @@ measure_download() {
 
 	while [ "$i" -le "$STREAMS" ]; do
 		(
-			n="$i"
+			url="$(sed -n "${i}p" "$urls")"
+			[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
 			while [ "$(date +%s)" -lt "$end_time" ]; do
-				url="$(sed -n "${n}p" "$urls")"
-				[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
 				curl -fsS -o /dev/null \
 					--connect-timeout 5 \
 					--max-time 2 \
@@ -318,7 +318,6 @@ measure_download() {
 					-H "User-Agent: $USER_AGENT" \
 					-w '%{size_download}\n' \
 					"$url" 2>>"$LOG_FILE" >> "$out" || true
-				n=$((n + STREAMS))
 			done
 		) &
 		i=$((i + 1))
@@ -356,20 +355,23 @@ measure_upload() {
 
 	while [ "$i" -le "$STREAMS" ]; do
 		(
-			n="$i"
+			url="$(sed -n "${i}p" "$urls")"
+			[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
 			while [ "$(date +%s)" -lt "$end_time" ]; do
-				url="$(sed -n "${n}p" "$urls")"
-				[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
+				now="$(date +%s)"
+				remaining=$(( end_time - now ))
+				[ "$remaining" -gt 0 ] || break
+				max_time="$remaining"
+				[ "$max_time" -le "$UPLOAD_REQUEST_MAX_TIME" ] || max_time="$UPLOAD_REQUEST_MAX_TIME"
 				head -c "$UPLOAD_SIZE" /dev/zero | curl -fsS -o /dev/null \
 					--connect-timeout 5 \
-					--max-time 2 \
+					--max-time "$max_time" \
 					-H "Referer: $REFERER" \
 					-H "User-Agent: $USER_AGENT" \
 					-H "Content-Type: application/octet-stream" \
 					--data-binary @- \
 					-w '%{size_upload}\n' \
 					"$url" 2>>"$LOG_FILE" >> "$out" || true
-				n=$((n + STREAMS))
 			done
 		) &
 		i=$((i + 1))

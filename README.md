@@ -110,7 +110,7 @@ opkg remove luci-app-yandex-internetometer
 yandex-internetometer run
 yandex-internetometer run --json
 yandex-internetometer run --debug
-yandex-internetometer run --streams 8 --download-time 10 --upload-time 10 --upload-size 12000000
+yandex-internetometer run --streams 8 --download-time 10 --upload-time 10 --upload-size 30720000
 yandex-internetometer start
 yandex-internetometer status
 yandex-internetometer stop
@@ -207,6 +207,16 @@ make package/luci-app-yandex-internetometer/compile V=s
 Ошибка TLS в `curl`: установите или обновите CA-сертификаты в вашей сборке OpenWrt.
 
 Роутер слабый по CPU: уменьшите количество потоков, длительность теста или размер upload-payload.
+
+Если тест запускается на самом роутере и CPU уходит в 100%, это не обязательно проблема WAN-канала. Такой тест генерирует HTTPS-трафик локальным процессом `curl`; аппаратный NAT/NSS обычно ускоряет проходящий LAN/WAN-трафик, но не TLS-клиент, запущенный на роутере. Поэтому ноутбук за роутером может показывать полную скорость при низкой загрузке CPU роутера, а локальный тест на OpenWrt может упираться в CPU.
+
+Проверьте загрузку во время upload:
+
+```sh
+top
+```
+
+Для оценки именно маршрутизации через NSS/offload запускайте тест с клиента за роутером, например `iperf3` или браузерный тест.
 
 Результат ниже ожидаемого: на скорость влияют CPU роутера, NAT offload, Wi-Fi, VPN, SQM и параллельный трафик.
 
