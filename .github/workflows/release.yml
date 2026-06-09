@@ -47,13 +47,14 @@ jobs:
       - name: Prepare package in SDK
         run: |
           cd "$RUNNER_TEMP/sdk"
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          ./scripts/feeds update luci packages
+          ./scripts/feeds install luci-base curl jq
           mkdir -p package/luci-app-yandex-internetometer
           rsync -a --delete \
             --exclude '.git' \
             --exclude '.github' \
             "$GITHUB_WORKSPACE"/ package/luci-app-yandex-internetometer/
+          echo "CONFIG_PACKAGE_luci-app-yandex-internetometer=m" >> .config
           make defconfig
 
       - name: Build package
