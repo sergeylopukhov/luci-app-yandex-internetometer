@@ -16,6 +16,13 @@ Hotfix `0.0.1-r3`:
 - adds an in-app RU/EN language switch that does not change global LuCI language;
 - keeps project version `0.0.1`, package release is `r3`.
 
+Hotfix `0.0.1-r4`:
+
+- makes the Start test button update the page immediately;
+- removes blocking `uci.save()/apply()` from the Start test action;
+- sets action buttons to `type="button"` to avoid accidental form submission;
+- keeps project version `0.0.1`, package release is `r4`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
@@ -33,7 +40,7 @@ apk update
 apk add luci-app-yandex-internetometer
 ```
 
-For an already installed `0.0.1-r1` or `0.0.1-r2` test build:
+For an already installed older test build:
 
 ```sh
 rm -f /var/cache/apk/*

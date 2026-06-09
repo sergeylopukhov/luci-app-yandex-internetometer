@@ -234,19 +234,43 @@ function renderActions() {
 	actionBox.innerHTML = '';
 
 	actionBox.appendChild(E('button', {
+		'type': 'button',
 		'class': 'btn cbi-button cbi-button-action',
 		'click': function() {
-			return uci.save().then(function() {
-				return uci.apply();
-			}).then(function() {
-				localStartedAt = Date.now();
-				return statusCall('start');
-			}).then(renderStatus);
+			var optimistic = Object.assign({}, statusData || {}, {
+				ok: true,
+				running: true,
+				timestamp: new Date().toISOString(),
+				download_mbps: null,
+				upload_mbps: null,
+				ping_ms: null,
+				jitter_ms: null,
+				error: null
+			});
+
+			localStartedAt = Date.now();
+			renderStatus(optimistic);
+
+			return statusCall('start').then(function(data) {
+				if (!data || data.error)
+					return renderStatus(data);
+
+				data.running = true;
+				if (!data.timestamp)
+					data.timestamp = optimistic.timestamp;
+
+				renderStatus(data);
+
+				window.setTimeout(function() {
+					statusCall('status').then(renderStatus);
+				}, 1000);
+			});
 		}
 	}, T('Start test')));
 
 	if (statusData && statusData.running) {
 		actionBox.appendChild(E('button', {
+			'type': 'button',
 			'class': 'btn cbi-button cbi-button-negative',
 			'click': function() {
 				localStartedAt = null;
@@ -256,6 +280,7 @@ function renderActions() {
 	}
 
 	actionBox.appendChild(E('button', {
+		'type': 'button',
 		'class': 'btn cbi-button',
 		'click': function() {
 			return statusCall('status').then(renderStatus);
@@ -263,6 +288,7 @@ function renderActions() {
 	}, T('Refresh status')));
 
 	actionBox.appendChild(E('button', {
+		'type': 'button',
 		'class': 'btn cbi-button',
 		'title': T('Switch application language'),
 		'click': function() {
