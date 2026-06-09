@@ -269,27 +269,34 @@ measure_latency() {
 	out="$1"
 	probes="$2"
 	server="$3"
+	url="$(latency_urls | sed -n '1p')"
+	series="$out.series"
 	: > "$out"
+	: > "$series"
 	write_progress "ping" true null null null null "$probes" "$server" null
 
-	latency_urls | while IFS= read -r url; do
-		[ -n "$url" ] || continue
-		i="0"
-		while [ "$i" -lt "$LATENCY_SAMPLES" ]; do
-			curl -fsS -o /dev/null \
-				--connect-timeout 3 \
-				--max-time 5 \
-				-H "Referer: $REFERER" \
-				-H "User-Agent: $USER_AGENT" \
-				-w '%{time_total}\n' \
-				"$url" 2>>"$LOG_FILE" >> "$out" || true
-			if [ -s "$out" ]; then
-				set -- $(latency_stats "$out")
-				write_progress "ping" true null null "$1" "$2" "$probes" "$server" null
-			fi
-			i=$((i + 1))
-		done
+	[ -n "$url" ] || fail "No Yandex latency probes are available"
+
+	i="0"
+	set --
+	while [ "$i" -le "$LATENCY_SAMPLES" ]; do
+		set -- "$@" "$url"
+		i=$((i + 1))
 	done
+
+	curl -fsS -o /dev/null \
+		--connect-timeout 3 \
+		--max-time $(( LATENCY_SAMPLES + 3 )) \
+		-H "Referer: $REFERER" \
+		-H "User-Agent: $USER_AGENT" \
+		-w '%{time_starttransfer}\n' \
+		"$@" 2>>"$LOG_FILE" >> "$series" || true
+
+	awk 'NR > 1 { print }' "$series" > "$out"
+	if [ -s "$out" ]; then
+		set -- $(latency_stats "$out")
+		write_progress "ping" true null null "$1" "$2" "$probes" "$server" null
+	fi
 
 	[ -s "$out" ] || fail "Unable to measure latency"
 }

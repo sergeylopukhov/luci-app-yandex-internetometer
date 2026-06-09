@@ -11,7 +11,7 @@ permissions:
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PKG_VERSION: 0.0.1-r11
+  PKG_VERSION: 0.0.1-r12
 
 jobs:
   build:

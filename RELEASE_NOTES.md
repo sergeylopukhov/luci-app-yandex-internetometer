@@ -72,6 +72,12 @@ Hotfix `0.0.1-r11`:
 - measures latency with 10 HTTP RTT samples and uses their average for ping;
 - keeps project version `0.0.1`, package release is `r11`.
 
+Hotfix `0.0.1-r12`:
+
+- changes latency measurement to one warm-up request plus 10 measured requests on a reused HTTP connection;
+- uses time to first byte for latency samples to avoid counting a new TCP/TLS handshake in every ping sample;
+- keeps project version `0.0.1`, package release is `r12`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
