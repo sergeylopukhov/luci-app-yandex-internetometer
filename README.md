@@ -15,15 +15,18 @@ LuCI-приложение и лёгкий CLI-backend для замера ско
 
 ## Установка из релиза
 
-Для OpenWrt с `apk` скачайте `.apk` под архитектуру роутера и установите:
+Для OpenWrt с `apk` лучше использовать репозиторий пакета:
 
 ```sh
-cd /tmp
+curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
+
 ARCH="$(apk --print-arch)"
-curl -L -o luci-app-yandex-internetometer.apk \
-  "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
-test "$(wc -c < luci-app-yandex-internetometer.apk)" -gt 1000
-apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" \
+  >> /etc/apk/repositories.d/yandex-internetometer.list
+
+apk update
+apk add luci-app-yandex-internetometer
 ```
 
 Для OpenWrt 24.10.x с legacy `opkg` используйте `.ipk`:
@@ -114,12 +117,15 @@ Most users should install from the GitHub release. Use SDK/buildroot only if you
 For apk-based OpenWrt:
 
 ```sh
-cd /tmp
+curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
+
 ARCH="$(apk --print-arch)"
-curl -L -o luci-app-yandex-internetometer.apk \
-  "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
-test "$(wc -c < luci-app-yandex-internetometer.apk)" -gt 1000
-apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" \
+  >> /etc/apk/repositories.d/yandex-internetometer.list
+
+apk update
+apk add luci-app-yandex-internetometer
 ```
 
 For OpenWrt 24.10.x legacy opkg:

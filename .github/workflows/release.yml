@@ -83,6 +83,7 @@ jobs:
           if [ ! -f "$SDK/private-key.pem" ]; then
             openssl genrsa -out "$SDK/private-key.pem" 2048
           fi
+          openssl rsa -in "$SDK/private-key.pem" -pubout -out "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub"
           ARCHES="
           aarch64
           aarch64_cortex-a53
@@ -147,6 +148,25 @@ jobs:
               --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk"
           done
 
+          REPO="$GITHUB_WORKSPACE/docs/packages"
+          mkdir -p "$REPO" "$GITHUB_WORKSPACE/docs/keys"
+          cp "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub" "$GITHUB_WORKSPACE/docs/keys/yandex-internetometer.rsa.pub"
+          for arch in $ARCHES; do
+            dir="$REPO/$arch/yandex-internetometer"
+            mkdir -p "$dir"
+            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk" "$dir/"
+            (
+              cd "$dir"
+              "$SDK/staging_dir/host/bin/apk" mkndx \
+                --root "$GITHUB_WORKSPACE" \
+                --keys-dir "$GITHUB_WORKSPACE" \
+                --allow-untrusted \
+                --sign "$SDK/private-key.pem" \
+                --output packages.adb \
+                *.apk
+            )
+          done
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -175,7 +195,7 @@ jobs:
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* \
+          gh release create "$GITHUB_REF_NAME" dist/* \
               --title "luci-app-yandex-internetometer $GITHUB_REF_NAME" \
               --notes-file RELEASE_NOTES.md \
               --latest

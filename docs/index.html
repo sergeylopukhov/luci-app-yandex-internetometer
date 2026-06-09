@@ -127,14 +127,17 @@
 			<li>Python, Node.js, npm или bash на роутере.</li>
 		</ul>
 
-		<h2>Установка из релиза</h2>
+		<h2>Установка через APK-репозиторий</h2>
 		<p>Для OpenWrt с <code>apk</code>:</p>
-		<pre><code>cd /tmp
+		<pre><code>curl -L -o /etc/apk/keys/yandex-internetometer.rsa.pub \
+  https://sergeylopukhov.github.io/luci-app-yandex-internetometer/keys/yandex-internetometer.rsa.pub
+
 ARCH="$(apk --print-arch)"
-curl -L -o luci-app-yandex-internetometer.apk \
-  "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
-test "$(wc -c &lt; luci-app-yandex-internetometer.apk)" -gt 1000
-apk add --allow-untrusted ./luci-app-yandex-internetometer.apk</code></pre>
+echo "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/packages/${ARCH}/yandex-internetometer/packages.adb" \
+  &gt;&gt; /etc/apk/repositories.d/yandex-internetometer.list
+
+apk update
+apk add luci-app-yandex-internetometer</code></pre>
 
 		<p>Для OpenWrt 24.10.x с legacy <code>opkg</code>:</p>
 		<pre><code>cd /tmp
