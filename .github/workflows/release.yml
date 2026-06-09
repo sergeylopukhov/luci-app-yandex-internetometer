@@ -151,6 +151,7 @@ jobs:
           done
 
           REPO="$GITHUB_WORKSPACE/docs/packages"
+          rm -rf "$REPO" "$GITHUB_WORKSPACE/docs/keys"
           mkdir -p "$REPO" "$GITHUB_WORKSPACE/docs/keys"
           cp "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub" "$GITHUB_WORKSPACE/docs/keys/yandex-internetometer.rsa.pub"
           for arch in $ARCHES; do

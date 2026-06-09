@@ -159,15 +159,7 @@ make package/luci-app-yandex-internetometer/compile V=s
 
 On apk-based OpenWrt targets, the buildroot/SDK produces an `.apk` package under `bin/packages/.../luci/` or the matching package output directory.
 
-## Install
-
-Copy the generated package to the router and install it with `apk`:
-
-```sh
-apk add --allow-untrusted ./luci-app-yandex-internetometer-*.apk
-```
-
-Uninstall:
+## Uninstall
 
 ```sh
 apk del luci-app-yandex-internetometer
