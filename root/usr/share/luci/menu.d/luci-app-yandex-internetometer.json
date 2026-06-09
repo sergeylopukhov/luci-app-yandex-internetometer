@@ -4,7 +4,7 @@
 		"order": 90,
 		"action": {
 			"type": "view",
-			"path": "status/yandex-internetometer"
+			"path": "status/yandex-internetometer-live"
 		},
 		"depends": {
 			"acl": [ "luci-app-yandex-internetometer" ]

@@ -46,6 +46,11 @@ Hotfix `0.0.1-r7`:
 - changes the default stream count to `8`;
 - keeps project version `0.0.1`, package release is `r7`.
 
+Hotfix `0.0.1-r8`:
+
+- changes the LuCI view module path to force browsers to load the new live-metrics UI instead of a cached percent-based view;
+- keeps project version `0.0.1`, package release is `r8`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
