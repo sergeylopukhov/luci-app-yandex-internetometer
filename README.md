@@ -15,12 +15,13 @@ LuCI-приложение и лёгкий CLI-backend для замера ско
 
 ## Установка из релиза
 
-Для OpenWrt с `apk` скачайте `.apk` из релиза `v0.0.1` и установите:
+Для OpenWrt с `apk` скачайте `.apk` под архитектуру роутера и установите:
 
 ```sh
 cd /tmp
+ARCH="$(apk --print-arch)"
 curl -L -o luci-app-yandex-internetometer.apk \
-  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk
+  "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
 apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
 ```
 
@@ -113,8 +114,9 @@ For apk-based OpenWrt:
 
 ```sh
 cd /tmp
+ARCH="$(apk --print-arch)"
 curl -L -o luci-app-yandex-internetometer.apk \
-  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk
+  "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
 apk add --allow-untrusted ./luci-app-yandex-internetometer.apk
 ```
 

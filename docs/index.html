@@ -130,8 +130,9 @@
 		<h2>Установка из релиза</h2>
 		<p>Для OpenWrt с <code>apk</code>:</p>
 		<pre><code>cd /tmp
+ARCH="$(apk --print-arch)"
 curl -L -o luci-app-yandex-internetometer.apk \
-  https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk
+  "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/v0.0.1/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-${ARCH}.apk"
 apk add --allow-untrusted ./luci-app-yandex-internetometer.apk</code></pre>
 
 		<p>Для OpenWrt 24.10.x с legacy <code>opkg</code>:</p>

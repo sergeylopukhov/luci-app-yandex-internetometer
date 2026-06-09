@@ -74,7 +74,7 @@ jobs:
             https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
           tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
 
-      - name: Build apk asset
+      - name: Build apk assets
         run: |
           set -eu
           SDK="$RUNNER_TEMP/sdk"
@@ -83,23 +83,63 @@ jobs:
           if [ ! -f "$SDK/private-key.pem" ]; then
             openssl genrsa -out "$SDK/private-key.pem" 2048
           fi
-          "$SDK/staging_dir/host/bin/apk" mkpkg \
-            --info "name:$PKG_NAME" \
-            --info "version:$PKG_VERSION" \
-            --info "arch:all" \
-            --info "license:MIT" \
-            --info "origin:$PKG_NAME" \
-            --info "url:https://github.com/sergeylopukhov/luci-app-yandex-internetometer" \
-            --info "maintainer:Sergey Lopukhov" \
-            --info "description:LuCI app for unofficial Yandex Internetometer-compatible speed tests" \
-            --info "depends:luci-base" \
-            --info "depends:curl" \
-            --info "depends:rpcd" \
-            --info "depends:uci" \
-            --info "depends:jq" \
-            --files "$PKGROOT" \
-            --sign "$SDK/private-key.pem" \
-            --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-all.apk"
+          ARCHES="
+          aarch64_cortex-a53
+          aarch64_cortex-a72
+          aarch64_cortex-a76
+          aarch64_generic
+          arm_arm1176jzf-s_vfp
+          arm_arm926ej-s
+          arm_cortex-a15_neon-vfpv4
+          arm_cortex-a5_vfpv4
+          arm_cortex-a7
+          arm_cortex-a7_neon-vfpv4
+          arm_cortex-a7_vfpv4
+          arm_cortex-a8_vfpv3
+          arm_cortex-a9
+          arm_cortex-a9_neon
+          arm_cortex-a9_vfpv3-d16
+          arm_fa526
+          arm_xscale
+          armeb_xscale
+          i386_pentium-mmx
+          i386_pentium4
+          mips64_mips64r2
+          mips64_octeonplus
+          mips64el_mips64r2
+          mips_24kc
+          mips_4kec
+          mips_mips32
+          mipsel_24kc
+          mipsel_24kc_24kf
+          mipsel_74kc
+          mipsel_mips32
+          powerpc64_e5500
+          powerpc_464fp
+          powerpc_8548
+          riscv64_generic
+          riscv64_riscv64
+          x86_64
+          "
+          for arch in $ARCHES; do
+            "$SDK/staging_dir/host/bin/apk" mkpkg \
+              --info "name:$PKG_NAME" \
+              --info "version:$PKG_VERSION" \
+              --info "arch:$arch" \
+              --info "license:MIT" \
+              --info "origin:$PKG_NAME" \
+              --info "url:https://github.com/sergeylopukhov/luci-app-yandex-internetometer" \
+              --info "maintainer:Sergey Lopukhov" \
+              --info "description:LuCI app for unofficial Yandex Internetometer-compatible speed tests" \
+              --info "depends:luci-base" \
+              --info "depends:curl" \
+              --info "depends:rpcd" \
+              --info "depends:uci" \
+              --info "depends:jq" \
+              --files "$PKGROOT" \
+              --sign "$SDK/private-key.pem" \
+              --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk"
+          done
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
