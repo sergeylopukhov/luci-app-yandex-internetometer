@@ -23,7 +23,7 @@ UPLOAD_REQUEST_MAX_TIME="10"
 LATENCY_SAMPLES="10"
 
 usage() {
-	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1]"
+	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1] [--latency-samples N]"
 	printf '%s\n' "       yandex-internetometer start|status|stop"
 }
 
@@ -163,6 +163,8 @@ load_config() {
 		[ -n "$value" ] && UPLOAD_SIZE="$value"
 		value="$(uci -q get yandex-internetometer.main.upload_enabled 2>/dev/null)"
 		[ -n "$value" ] && UPLOAD_ENABLED="$value"
+		value="$(uci -q get yandex-internetometer.main.latency_samples 2>/dev/null)"
+		[ -n "$value" ] && LATENCY_SAMPLES="$value"
 		value="$(uci -q get yandex-internetometer.main.debug 2>/dev/null)"
 		[ -n "$value" ] && DEBUG="$value"
 	fi
@@ -204,6 +206,11 @@ parse_run_args() {
 				UPLOAD_ENABLED="$2"
 				shift 2
 				;;
+			--latency-samples)
+				[ -n "$2" ] || fail "--latency-samples requires a value"
+				LATENCY_SAMPLES="$2"
+				shift 2
+				;;
 			*)
 				fail "Unknown option: $1"
 				;;
@@ -216,6 +223,7 @@ validate_settings() {
 	validate_uint_range "$DOWNLOAD_TIME" 1 60 "download_time"
 	validate_uint_range "$UPLOAD_TIME" 1 60 "upload_time"
 	validate_uint_range "$UPLOAD_SIZE" 1024 50000000 "upload_size"
+	validate_uint_range "$LATENCY_SAMPLES" 10 50 "latency_samples"
 
 	case "$UPLOAD_ENABLED" in
 		0|1) ;;
@@ -453,7 +461,7 @@ run_test() {
 	trap cleanup EXIT INT TERM
 
 	: > "$LOG_FILE"
-	debug_log "starting test streams=$STREAMS download_time=$DOWNLOAD_TIME upload_time=$UPLOAD_TIME upload_size=$UPLOAD_SIZE upload_enabled=$UPLOAD_ENABLED"
+	debug_log "starting test streams=$STREAMS download_time=$DOWNLOAD_TIME upload_time=$UPLOAD_TIME upload_size=$UPLOAD_SIZE upload_enabled=$UPLOAD_ENABLED latency_samples=$LATENCY_SAMPLES"
 	write_progress "prepare" true null null null null 0 null null
 	fetch_probes
 

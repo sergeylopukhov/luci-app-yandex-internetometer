@@ -96,7 +96,9 @@ Hotfix `0.0.1-r15`:
 
 - stops recreating the whole speedometer DOM on every one-second polling update, so numbers and tick animations no longer blink;
 - matches the saved Yandex Internetometer page sizing more closely: `957px` desktop speedometer, `64px` desktop values, and `213px` metric blocks;
-- removes the first-render SVG scale animation that restarted during polling in earlier builds;
+- changes the scale from an ellipse to a capsule-like path with straight top and bottom sections, rounded sides, and a bottom-center gap;
+- adds an outer progress path around the capsule during running tests;
+- adds a LuCI/backend setting for latency sample count, defaulting to 10 and allowing 10-50 samples;
 - keeps project version `0.0.1`, package release is `r15`.
 
 Assets:

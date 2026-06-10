@@ -29,6 +29,7 @@ var translations = {
 		'Jitter': 'Джиттер',
 		'Last run': 'Последний запуск',
 		'Latency': 'Задержка',
+		'Latency sample count': 'Количество замеров задержки',
 		'Mbps': 'Мбит/с',
 		'Measuring download speed': 'Измерение входящей скорости',
 		'Measuring upload speed': 'Измерение исходящей скорости',
@@ -335,28 +336,65 @@ function detailValues(data) {
 
 function renderSpeedometerSvg(progress, running) {
 	var ticks = [];
-	var total = 148;
-	var cx = 478.5;
+	var total = 154;
+	var left = 34;
+	var right = 923;
+	var top = 38;
+	var bottom = 354;
 	var cy = 196;
-	var rxOuter = 445;
-	var ryOuter = 172;
-	var i, angle, rad, major, length, rxInner, ryInner, x1, y1, x2, y2, className;
+	var rx = 174;
+	var ry = 158;
+	var leftCx = left + rx;
+	var rightCx = right - rx;
+	var straight = rightCx - leftCx;
+	var arc = Math.PI * Math.sqrt((rx * rx + ry * ry) / 2);
+	var perimeter = straight * 2 + arc * 2;
+	var outerOffset = 0;
+	var i, d, segment, t, x2, y2, nx, ny, major, length, x1, y1, className;
+	var progressValue = Math.max(0, Math.min(100, progress));
 
 	for (i = 0; i < total; i++) {
-		angle = -180 + (360 / total) * i;
-		rad = angle * Math.PI / 180;
-		major = i % 24 === 0 || i === 74;
-		length = major ? 44 : 29;
-		rxInner = rxOuter - length;
-		ryInner = ryOuter - length * .66;
-		x1 = cx + rxInner * Math.cos(rad);
-		y1 = cy + ryInner * Math.sin(rad);
-		x2 = cx + rxOuter * Math.cos(rad);
-		y2 = cy + ryOuter * Math.sin(rad);
-		className = 'yandex-internetometer-svg-tick' + (major ? ' is-major' : '');
+		d = perimeter * i / total;
+		major = i % 24 === 0 || i === 77;
+		length = major ? 45 : 30;
 
-		if (running && i <= Math.round(total * progress / 100))
-			className += ' is-lit';
+		if (d < straight) {
+			t = d / straight;
+			x2 = leftCx + straight * t;
+			y2 = top + outerOffset;
+			nx = 0;
+			ny = 1;
+		}
+		else if (d < straight + arc) {
+			segment = (d - straight) / arc;
+			t = -Math.PI / 2 + Math.PI * segment;
+			x2 = rightCx + rx * Math.cos(t);
+			y2 = cy + ry * Math.sin(t);
+			nx = -Math.cos(t);
+			ny = -Math.sin(t);
+		}
+		else if (d < straight * 2 + arc) {
+			segment = (d - straight - arc) / straight;
+			x2 = rightCx - straight * segment;
+			y2 = bottom - outerOffset;
+			nx = 0;
+			ny = -1;
+		}
+		else {
+			segment = (d - straight * 2 - arc) / arc;
+			t = Math.PI / 2 + Math.PI * segment;
+			x2 = leftCx + rx * Math.cos(t);
+			y2 = cy + ry * Math.sin(t);
+			nx = -Math.cos(t);
+			ny = -Math.sin(t);
+		}
+
+		if (y2 === bottom && x2 > 382 && x2 < 575)
+			continue;
+
+		x1 = x2 + nx * length;
+		y1 = y2 + ny * length;
+		className = 'yandex-internetometer-svg-tick' + (major ? ' is-major' : '');
 
 		ticks.push(E('line', {
 			'class': className,
@@ -374,10 +412,16 @@ function renderSpeedometerSvg(progress, running) {
 		'role': 'img',
 		'aria-label': T('Yandex Internetometer')
 	}, [
+		running ? E('path', {
+			'class': 'yandex-internetometer-progress-path',
+			'd': 'M 208 18 H 749 A 174 178 0 0 1 749 374 H 208 A 174 178 0 0 1 208 18',
+			'pathLength': '100',
+			'style': 'stroke-dasharray:%s 100'.format(progressValue)
+		}) : '',
 		E('g', { 'class': 'yandex-internetometer-svg-ticks' }, ticks),
 		E('text', { 'class': 'yandex-internetometer-svg-label is-top', 'x': '478.5', 'y': '92', 'text-anchor': 'middle' }, '100'),
-		E('text', { 'class': 'yandex-internetometer-svg-label is-zero', 'x': '356', 'y': '372', 'text-anchor': 'middle' }, '0'),
-		E('text', { 'class': 'yandex-internetometer-svg-label is-max', 'x': '604', 'y': '372', 'text-anchor': 'middle' }, '1000')
+		E('text', { 'class': 'yandex-internetometer-svg-label is-zero', 'x': '356', 'y': '374', 'text-anchor': 'middle' }, '0'),
+		E('text', { 'class': 'yandex-internetometer-svg-label is-max', 'x': '604', 'y': '374', 'text-anchor': 'middle' }, '1000')
 	]);
 }
 
@@ -447,12 +491,31 @@ function renderHero(data) {
 				'type': 'button',
 				'class': 'yandex-internetometer-measure-button',
 				'click': startTest
-			}, T('Start test')) : E('div', { 'class': 'yandex-internetometer-speed-grid' }, [
+			}, 'Измерить') : E('div', { 'class': 'yandex-internetometer-speed-grid' }, [
 				speedMetric('is-download', T('Incoming'), '↓', hasValue(data.download_mbps) ? metricNumber(data.download_mbps) : '--', T('Mbps'), phase === 'download'),
 				speedMetric('is-upload', T('Outgoing'), '↑', hasValue(data.upload_mbps) ? metricNumber(data.upload_mbps) : '--', T('Mbps'), phase === 'upload'),
 				speedMetric('is-ping', T('Latency'), '', hasValue(data.ping_ms) ? metricNumber(data.ping_ms) : '--', T('ms'), phase === 'ping' || phase === 'prepare')
 			])
 		]),
+		data.running ? E('div', { 'class': 'yandex-internetometer-measure-progress' }, [
+			E('div', { 'class': 'yandex-internetometer-measure-bars' }, [
+				E('span', { 'style': 'width:%s%%'.format(tickProgress) }),
+				E('span'),
+				E('span')
+			]),
+			E('div', { 'class': 'yandex-internetometer-measure-row' }, [
+				E('strong', {}, '%s%%'.format(tickProgress)),
+				E('span', {}, phaseText),
+				E('button', {
+					'type': 'button',
+					'class': 'yandex-internetometer-inline-stop',
+					'click': function() {
+						localStartedAt = null;
+						return statusCall('stop').then(renderStatus);
+					}
+				}, '×')
+			])
+		]) : '',
 		E('div', { 'class': 'yandex-internetometer-details' }, [
 			detailRow(T('Jitter'), detailValues(data)[0]),
 			detailRow(T('Ping samples'), detailValues(data)[1]),
@@ -479,7 +542,7 @@ function renderStatusKey(data) {
 
 function updateSpeedometerTicks(node, data) {
 	var svg = node.querySelector('.yandex-internetometer-speedometer-svg');
-	var ticks, progress, litLimit, i, tick, className;
+	var progressPath, progress;
 
 	if (!svg)
 		return;
@@ -487,18 +550,9 @@ function updateSpeedometerTicks(node, data) {
 	progress = Math.max(0, Math.min(100, gaugeProgress(data)));
 	svg.className.baseVal = 'yandex-internetometer-speedometer-svg' + (data && data.running ? ' is-running' : '');
 
-	ticks = svg.querySelectorAll('.yandex-internetometer-svg-tick');
-	litLimit = Math.round(ticks.length * progress / 100);
-
-	for (i = 0; i < ticks.length; i++) {
-		tick = ticks[i];
-		className = 'yandex-internetometer-svg-tick';
-		if (i % 24 === 0 || i === 74)
-			className += ' is-major';
-		if (data && data.running && i <= litLimit)
-			className += ' is-lit';
-		tick.setAttribute('class', className);
-	}
+	progressPath = svg.querySelector('.yandex-internetometer-progress-path');
+	if (progressPath)
+		progressPath.setAttribute('style', 'stroke-dasharray:%s 100'.format(progress));
 }
 
 function updateMetricNode(node, selector, value, active) {
@@ -519,7 +573,7 @@ function updateMetricNode(node, selector, value, active) {
 }
 
 function updateStatusInPlace(data) {
-	var phaseTextNode, phase, values, rows, i, strongNode;
+	var phaseTextNode, phase, values, rows, i, strongNode, tickProgress, progressNode, progressFill;
 
 	if (!statusBox || !statusBox.firstElementChild)
 		return false;
@@ -528,6 +582,20 @@ function updateStatusInPlace(data) {
 	phaseTextNode = statusBox.querySelector('.yandex-internetometer-phase-text');
 	if (phaseTextNode)
 		phaseTextNode.textContent = data && data.running ? runningPhase(data, runningElapsed(data)) : gaugeStateText(data);
+
+	tickProgress = Math.max(0, Math.min(100, gaugeProgress(data)));
+	progressNode = statusBox.querySelector('.yandex-internetometer-measure-progress');
+	if (progressNode) {
+		progressFill = progressNode.querySelector('.yandex-internetometer-measure-bars span:first-child');
+		if (progressFill)
+			progressFill.style.width = '%s%%'.format(tickProgress);
+		strongNode = progressNode.querySelector('.yandex-internetometer-measure-row strong');
+		if (strongNode)
+			strongNode.textContent = '%s%%'.format(tickProgress);
+		phaseTextNode = progressNode.querySelector('.yandex-internetometer-measure-row span');
+		if (phaseTextNode)
+			phaseTextNode.textContent = data && data.running ? runningPhase(data, runningElapsed(data)) : gaugeStateText(data);
+	}
 
 	updateSpeedometerTicks(statusBox, data);
 	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-download', hasValue(data.download_mbps) ? metricNumber(data.download_mbps) : '--', phase === 'download');
@@ -649,6 +717,10 @@ return view.extend({
 		o.rmempty = false;
 		o.description = T('Seconds.');
 
+		o = s.option(form.Value, 'latency_samples', T('Latency sample count'));
+		o.datatype = 'range(10, 50)';
+		o.rmempty = false;
+
 		o = s.option(form.Value, 'upload_size', T('Upload payload size'));
 		o.datatype = 'range(1024, 50000000)';
 		o.rmempty = false;
@@ -679,13 +751,12 @@ return view.extend({
 					'.yandex-internetometer-brandline span{text-align:right;overflow-wrap:anywhere}',
 					'.yandex-internetometer-oval{position:relative;width:min(957px,100%);aspect-ratio:957/392;margin:0 auto;display:grid;place-items:center}',
 					'.yandex-internetometer-speedometer-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}',
+					'.yandex-internetometer-progress-path{fill:none;stroke:var(--yi-red);stroke-width:8;stroke-linecap:butt;opacity:1;transition:stroke-dasharray .55s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-svg-tick{stroke:var(--yi-red);stroke-width:3.2;stroke-linecap:square;opacity:.98;transform-box:fill-box;transform-origin:center;transition:opacity .28s cubic-bezier(.22,1,.36,1),stroke-width .28s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-svg-tick.is-major{stroke-width:3.7}',
-					'.yandex-internetometer-speedometer-svg.is-running .yandex-internetometer-svg-tick{opacity:.88;animation:yi-tick-scan 1.8s cubic-bezier(.22,1,.36,1) infinite;animation-delay:calc(var(--i) * 12ms)}',
-					'.yandex-internetometer-speedometer-svg.is-running .yandex-internetometer-svg-tick.is-lit{opacity:1;stroke-width:3.8}',
 					'.yandex-internetometer-svg-label{fill:var(--yi-red);font-size:24px;font-weight:500;dominant-baseline:middle}',
-					'.yandex-internetometer-measure-button{position:relative;z-index:3;min-width:196px;min-height:50px;border:0;border-radius:11px;background:#fcdb32;color:#242424;font-size:18px;font-weight:700;cursor:pointer;box-shadow:none;transition:transform .2s cubic-bezier(.22,1,.36,1),background-color .2s cubic-bezier(.22,1,.36,1)}',
-					'.yandex-internetometer-measure-button:hover{background:#f5d21f;transform:translateY(-1px)}',
+					'.yandex-internetometer-measure-button{position:relative;z-index:3;border:0;background:transparent;color:var(--yi-text);font-size:64px;line-height:1;font-weight:400;cursor:pointer;box-shadow:none;transition:color .15s linear}',
+					'.yandex-internetometer-measure-button:hover{color:rgba(255,81,56,.85)}',
 					'.yandex-internetometer-speed-grid{position:absolute;z-index:2;inset:0}',
 					'.yandex-internetometer-speed-metric{position:absolute;top:52%;width:213px;text-align:center;min-width:0;transform:translate(-50%,-50%);transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .3s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-speed-metric.is-download{left:24%}',
@@ -696,7 +767,17 @@ return view.extend({
 					'.yandex-internetometer-speed-label b{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:var(--yi-text);color:var(--yi-bg);font-size:10px;line-height:1;font-weight:800}',
 					'.yandex-internetometer-speed-label b:empty{display:none}',
 					'.yandex-internetometer-speed-value{font-size:64px;line-height:1;font-weight:400;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin:8px 0;transition:opacity .2s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-hero.is-running .yandex-internetometer-speed-value{color:rgba(0,0,0,.3)}',
+					'.yandex-internetometer-hero.is-running .yandex-internetometer-speed-metric.is-active .yandex-internetometer-speed-value{color:var(--yi-red)}',
 					'.yandex-internetometer-speed-unit{font-size:17px;line-height:1.2;font-weight:500;color:var(--yi-text)}',
+					'.yandex-internetometer-measure-progress{width:min(330px,80%);margin:-8px auto 10px;color:var(--yi-text)}',
+					'.yandex-internetometer-measure-bars{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;height:4px;margin-bottom:12px}',
+					'.yandex-internetometer-measure-bars span{display:block;background:rgba(0,0,0,.06);overflow:hidden}',
+					'.yandex-internetometer-measure-bars span:first-child{background:var(--yi-text);transition:width .55s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-measure-row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;font-size:16px;line-height:1.2}',
+					'.yandex-internetometer-measure-row strong{font-size:16px;font-weight:400}',
+					'.yandex-internetometer-measure-row span{font-size:16px;font-weight:400;white-space:nowrap}',
+					'.yandex-internetometer-inline-stop{border:0;background:transparent;color:var(--yi-text);font-size:24px;line-height:1;cursor:pointer;padding:0 4px}',
 					'.yandex-internetometer-stages{width:min(720px,100%);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}',
 					'.yandex-internetometer-stage-pill{display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--yi-border);border-radius:8px;padding:8px 9px;text-align:center;font-size:12px;color:var(--yi-muted);background:rgba(255,255,255,.54);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background-color .2s cubic-bezier(.22,1,.36,1),border-color .2s cubic-bezier(.22,1,.36,1),color .2s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-stage-dot{width:7px;height:7px;border-radius:50%;background:rgba(35,35,35,.22);flex:0 0 auto}',
@@ -710,14 +791,13 @@ return view.extend({
 					'.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:0}',
 					'.yandex-internetometer-detail-row span{font-size:12px;color:var(--yi-muted);white-space:nowrap}',
 					'.yandex-internetometer-detail-row strong{font-size:13px;color:var(--yi-text);font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}',
-					'@keyframes yi-tick-scan{0%,100%{opacity:.86}45%{opacity:1}70%{opacity:.94}}',
 					'@media (max-width:900px){.yandex-internetometer-speed-metric{width:160px}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:48px}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
 					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}}',
 				].join('')),
 				E('h2', {}, T('Yandex Internetometer')),
 				E('p', {}, T('Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software.')),
-				actionBox,
 				statusBox,
+				actionBox,
 				formNode
 			]);
 
