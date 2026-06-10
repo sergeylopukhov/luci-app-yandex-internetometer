@@ -171,6 +171,9 @@ function hasVisibleResult(data) {
 
 function statusCall(command) {
 	return fs.exec_direct('/usr/libexec/yandex-internetometer/' + command, [], 'json').catch(function(err) {
+		if (err && String(err).indexOf('XHR request aborted') !== -1 && statusData)
+			return statusData;
+
 		return {
 			ok: false,
 			running: false,

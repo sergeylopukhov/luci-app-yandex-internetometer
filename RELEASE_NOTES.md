@@ -127,6 +127,12 @@ Hotfix `0.0.1-r20`:
 - rebuilds the APK repository from the current full source tree so the published package includes the latest backend, UI, config, and installer changes;
 - keeps project version `0.0.1`, package release is `r20`.
 
+Hotfix `0.0.1-r21`:
+
+- avoids refreshing the router public IP on every running status poll, reducing backend work during heavy upload tests;
+- keeps the current UI state when LuCI/browser aborts a polling XHR instead of replacing the test with an error banner;
+- keeps project version `0.0.1`, package release is `r21`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.

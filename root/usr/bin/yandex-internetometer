@@ -618,8 +618,8 @@ status_test() {
 	ensure_state_dir
 	if running_pid; then
 		if [ -s "$RESULT_FILE" ]; then
-			jq --arg public_ip "$(public_ip)" \
-				'.running = true | .public_ip = (if $public_ip == "" then (.public_ip // null) else $public_ip end)' \
+			jq \
+				'.running = true' \
 				"$RESULT_FILE" 2>/dev/null || json_result true true null null null null 0 null null
 		else
 			json_result true true null null null null 0 null null
