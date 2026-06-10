@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-yandex-internetometer
 PKG_VERSION:=0.0.1
-PKG_RELEASE:=21
+PKG_RELEASE:=22
 
 PKG_MAINTAINER:=OpenWrt community
 PKG_LICENSE:=MIT
@@ -25,8 +25,8 @@ if command -v uci >/dev/null 2>&1; then
 		uci -q set yandex-internetometer.main.upload_streams='auto' 2>/dev/null || true
 	fi
 	upload_size="$$(uci -q get yandex-internetometer.main.upload_size 2>/dev/null || true)"
-	if [ -z "$$upload_size" ] || [ "$$upload_size" = "12000000" ] || [ "$$upload_size" = "30720000" ]; then
-		uci -q set yandex-internetometer.main.upload_size='50000000' 2>/dev/null || true
+	if [ -z "$$upload_size" ] || [ "$$upload_size" = "12000000" ] || [ "$$upload_size" = "50000000" ]; then
+		uci -q set yandex-internetometer.main.upload_size='30720000' 2>/dev/null || true
 	fi
 	uci -q commit yandex-internetometer 2>/dev/null || true
 fi

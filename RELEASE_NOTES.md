@@ -133,6 +133,13 @@ Hotfix `0.0.1-r21`:
 - keeps the current UI state when LuCI/browser aborts a polling XHR instead of replacing the test with an error banner;
 - keeps project version `0.0.1`, package release is `r21`.
 
+Hotfix `0.0.1-r22`:
+
+- reverts the upload connection-reuse experiment because long single `curl` workers can pin upload load to one CPU core and stall LuCI polling;
+- keeps the prepared `/tmp` upload payload from `r17`, but restores the bounded short POST loop for predictable completion;
+- restores the default upload payload size to 30.72 MB;
+- keeps project version `0.0.1`, package release is `r22`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.

@@ -17,7 +17,7 @@ UPLOAD_STREAMS="auto"
 EFFECTIVE_UPLOAD_STREAMS=""
 DOWNLOAD_TIME="10"
 UPLOAD_TIME="10"
-UPLOAD_SIZE="50000000"
+UPLOAD_SIZE="30720000"
 UPLOAD_ENABLED="1"
 DEBUG="0"
 JSON_MODE="0"
@@ -397,69 +397,6 @@ measure_download() {
 	[ "$bytes" -gt 0 ] || fail "Unable to measure download speed"
 }
 
-run_upload_workers() {
-	out="$1"
-	urls="$2"
-	stream_count="$3"
-	duration="$4"
-	payload="$5"
-	i="1"
-
-	while [ "$i" -le "$stream_count" ]; do
-		(
-			url="$(sed -n "${i}p" "$urls")"
-			[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
-			repeat_limit=$(( duration * 6 ))
-			[ "$repeat_limit" -ge 12 ] || repeat_limit="12"
-			repeat="0"
-			set --
-			while [ "$repeat" -lt "$repeat_limit" ]; do
-				set -- "$@" -o /dev/null "$url"
-				repeat=$((repeat + 1))
-			done
-			curl -fsS \
-				--connect-timeout 5 \
-				--max-time "$duration" \
-				-H "Referer: $REFERER" \
-				-H "User-Agent: $USER_AGENT" \
-				-H "Content-Type: application/octet-stream" \
-				--data-binary "@$payload" \
-				-w '%{size_upload}\n' \
-				"$@" 2>>"$LOG_FILE" >> "$out" || true
-		) &
-		i=$((i + 1))
-	done
-
-	wait
-}
-
-select_upload_streams() {
-	urls="$1"
-	payload="$2"
-	best_streams="4"
-	best_bytes="0"
-
-	case "$UPLOAD_STREAMS" in
-		auto) ;;
-		*) printf '%s' "$UPLOAD_STREAMS"; return 0 ;;
-	esac
-
-	for candidate in 4 8 12; do
-		bench_out="${payload}.bench.${candidate}"
-		: > "$bench_out"
-		run_upload_workers "$bench_out" "$urls" "$candidate" 2 "$payload"
-		bytes="$(sum_file "$bench_out")"
-		debug_log "upload auto candidate streams=$candidate bytes=$bytes"
-		if [ "$bytes" -gt "$best_bytes" ]; then
-			best_bytes="$bytes"
-			best_streams="$candidate"
-		fi
-	done
-
-	debug_log "upload auto selected streams=$best_streams bytes=$best_bytes"
-	printf '%s' "$best_streams"
-}
-
 measure_upload() {
 	out="$1"
 	urls="$2"
@@ -471,16 +408,41 @@ measure_upload() {
 	payload="${out}.payload"
 	: > "$out"
 	head -c "$UPLOAD_SIZE" /dev/zero > "$payload" || fail "Unable to prepare upload payload"
+	case "$UPLOAD_STREAMS" in
+		auto) EFFECTIVE_UPLOAD_STREAMS="$STREAMS" ;;
+		*) EFFECTIVE_UPLOAD_STREAMS="$UPLOAD_STREAMS" ;;
+	esac
 	write_progress "upload" true "$download" null "$ping" "$jitter" "$probes" "$server" null
-	EFFECTIVE_UPLOAD_STREAMS="$(select_upload_streams "$urls" "$payload")"
 	start_time="$(date +%s)"
 	end_time=$(( start_time + UPLOAD_TIME ))
 	write_progress "upload" true "$download" null "$ping" "$jitter" "$probes" "$server" null
 
-	run_upload_workers "$out" "$urls" "$EFFECTIVE_UPLOAD_STREAMS" "$UPLOAD_TIME" "$payload" &
-	worker_pid="$!"
+	i="1"
+	while [ "$i" -le "$EFFECTIVE_UPLOAD_STREAMS" ]; do
+		(
+			url="$(sed -n "${i}p" "$urls")"
+			[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
+			while [ "$(date +%s)" -lt "$end_time" ]; do
+				now="$(date +%s)"
+				remaining=$(( end_time - now ))
+				[ "$remaining" -gt 0 ] || break
+				max_time="$remaining"
+				[ "$max_time" -le "$UPLOAD_REQUEST_MAX_TIME" ] || max_time="$UPLOAD_REQUEST_MAX_TIME"
+				curl -fsS -o /dev/null \
+					--connect-timeout 5 \
+					--max-time "$max_time" \
+					-H "Referer: $REFERER" \
+					-H "User-Agent: $USER_AGENT" \
+					-H "Content-Type: application/octet-stream" \
+					--data-binary "@$payload" \
+					-w '%{size_upload}\n' \
+					"$url" 2>>"$LOG_FILE" >> "$out" || true
+			done
+		) &
+		i=$((i + 1))
+	done
 
-	while kill -0 "$worker_pid" 2>/dev/null && [ "$(date +%s)" -lt "$end_time" ]; do
+	while [ "$(date +%s)" -lt "$end_time" ]; do
 		sleep 1
 		now="$(date +%s)"
 		elapsed=$(( now - start_time ))
@@ -490,7 +452,7 @@ measure_upload() {
 		write_progress "upload" true "$download" "$mbps" "$ping" "$jitter" "$probes" "$server" null
 	done
 
-	wait "$worker_pid" 2>/dev/null || true
+	wait
 
 	bytes="$(sum_file "$out")"
 	[ "$bytes" -gt 0 ] || fail "Unable to measure upload speed"
