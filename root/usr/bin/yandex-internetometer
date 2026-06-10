@@ -6,6 +6,7 @@ PID_FILE="$STATE_DIR/pid"
 RESULT_FILE="$STATE_DIR/result.json"
 LOG_FILE="$STATE_DIR/debug.log"
 PROBES_FILE="$STATE_DIR/probes.json"
+PUBLIC_IP_FILE="$STATE_DIR/public_ip"
 SELF="/usr/bin/yandex-internetometer"
 GET_PROBES_URL="https://yandex.ru/internet/api/v0/get-probes"
 REFERER="https://yandex.ru/internet/"
@@ -87,6 +88,7 @@ json_result() {
 	json_latency_samples="$(json_uint_or_default "$LATENCY_SAMPLES" 10)"
 	json_probe_count="$(json_uint_or_default "$probe_count" 0)"
 	json_phase="$PROGRESS_PHASE"
+	json_public_ip="$(public_ip)"
 
 	jq -cn \
 		--argjson ok "$ok" \
@@ -103,6 +105,7 @@ json_result() {
 		--argjson upload_enabled "$json_upload_enabled" \
 		--argjson latency_samples "$json_latency_samples" \
 		--argjson probe_count "$json_probe_count" \
+		--arg public_ip "$json_public_ip" \
 		--arg server "$server" \
 		--arg error "$error" '
 		def num_or_null($v): if $v == "" or $v == "null" then null else (try ($v | tonumber) catch null) end;
@@ -121,9 +124,29 @@ json_result() {
 			upload_enabled: $upload_enabled,
 			latency_samples: $latency_samples,
 			probe_count: $probe_count,
+			public_ip: (if $public_ip == "" or $public_ip == "null" then null else $public_ip end),
 			server: (if $server == "" or $server == "null" then null else $server end),
 			error: (if $error == "" or $error == "null" then null else $error end)
 		}'
+}
+
+public_ip() {
+	ip=""
+
+	if [ -s "$PUBLIC_IP_FILE" ]; then
+		ip="$(cat "$PUBLIC_IP_FILE" 2>/dev/null)"
+	fi
+
+	if [ -z "$ip" ]; then
+		ip="$(curl -fsS --connect-timeout 2 --max-time 3 https://ipv4-internet.yandex.net/api/v0/ip 2>>"$LOG_FILE" | sed -n '1s/[^0-9.]//gp')"
+		[ -n "$ip" ] || ip="$(curl -fsS --connect-timeout 2 --max-time 3 https://api.ipify.org 2>>"$LOG_FILE" | sed -n '1s/[^0-9.]//gp')"
+		case "$ip" in
+			*.*.*.*) printf '%s\n' "$ip" > "$PUBLIC_IP_FILE" ;;
+			*) ip="" ;;
+		esac
+	fi
+
+	printf '%s' "$ip"
 }
 
 write_progress() {
@@ -535,7 +558,9 @@ status_test() {
 	ensure_state_dir
 	if running_pid; then
 		if [ -s "$RESULT_FILE" ]; then
-			jq '.running = true' "$RESULT_FILE" 2>/dev/null || json_result true true null null null null 0 null null
+			jq --arg public_ip "$(public_ip)" \
+				'.running = true | .public_ip = (if $public_ip == "" then (.public_ip // null) else $public_ip end)' \
+				"$RESULT_FILE" 2>/dev/null || json_result true true null null null null 0 null null
 		else
 			json_result true true null null null null 0 null null
 		fi
@@ -545,7 +570,9 @@ status_test() {
 	rm -f "$PID_FILE"
 	rm -rf "$LOCK_DIR"
 	if [ -s "$RESULT_FILE" ]; then
-		cat "$RESULT_FILE"
+		jq --arg public_ip "$(public_ip)" \
+			'.public_ip = (if $public_ip == "" then (.public_ip // null) else $public_ip end)' \
+			"$RESULT_FILE" 2>/dev/null || cat "$RESULT_FILE"
 	else
 		json_result true false null null null null 0 null null
 	fi
