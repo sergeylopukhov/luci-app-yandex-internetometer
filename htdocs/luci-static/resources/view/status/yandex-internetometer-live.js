@@ -9,6 +9,7 @@ var statusBox;
 var actionBox;
 var statusData = null;
 var localStartedAt = null;
+var statusLayoutKey = null;
 var languageStorageKey = 'yandexInternetometerLanguage';
 var translations = {
 	ru: {
@@ -321,6 +322,17 @@ function detailRow(label, value) {
 	]);
 }
 
+function detailValues(data) {
+	return [
+		emptyValue(data.jitter_ms, T('ms')),
+		emptyValue(data.latency_samples),
+		emptyValue(data.streams),
+		emptyValue(data.probe_count),
+		emptyValue(data.server),
+		emptyValue(data.timestamp)
+	];
+}
+
 function renderSpeedometerSvg(progress, running) {
 	var ticks = [];
 	var total = 148;
@@ -427,7 +439,7 @@ function renderHero(data) {
 	}, [
 		E('div', { 'class': 'yandex-internetometer-brandline' }, [
 			E('strong', {}, T('Yandex Internetometer')),
-			E('span', {}, phaseText)
+			E('span', { 'class': 'yandex-internetometer-phase-text' }, phaseText)
 		]),
 		E('div', { 'class': 'yandex-internetometer-oval' }, [
 			renderSpeedometerSvg(tickProgress, !!data.running),
@@ -442,20 +454,109 @@ function renderHero(data) {
 			])
 		]),
 		E('div', { 'class': 'yandex-internetometer-details' }, [
-			detailRow(T('Jitter'), emptyValue(data.jitter_ms, T('ms'))),
-			detailRow(T('Ping samples'), emptyValue(data.latency_samples)),
-			detailRow(T('Streams'), emptyValue(data.streams)),
-			detailRow(T('Probe servers'), emptyValue(data.probe_count)),
-			detailRow(T('Server'), emptyValue(data.server)),
-			detailRow(T('Last run'), emptyValue(data.timestamp))
+			detailRow(T('Jitter'), detailValues(data)[0]),
+			detailRow(T('Ping samples'), detailValues(data)[1]),
+			detailRow(T('Streams'), detailValues(data)[2]),
+			detailRow(T('Probe servers'), detailValues(data)[3]),
+			detailRow(T('Server'), detailValues(data)[4]),
+			detailRow(T('Last run'), detailValues(data)[5])
 		])
 	]);
 }
 
+function renderStatusKey(data) {
+	if (data && data.error)
+		return 'error';
+
+	if (data && data.running)
+		return 'running';
+
+	if (hasResult(data))
+		return 'result';
+
+	return 'ready';
+}
+
+function updateSpeedometerTicks(node, data) {
+	var svg = node.querySelector('.yandex-internetometer-speedometer-svg');
+	var ticks, progress, litLimit, i, tick, className;
+
+	if (!svg)
+		return;
+
+	progress = Math.max(0, Math.min(100, gaugeProgress(data)));
+	svg.className.baseVal = 'yandex-internetometer-speedometer-svg' + (data && data.running ? ' is-running' : '');
+
+	ticks = svg.querySelectorAll('.yandex-internetometer-svg-tick');
+	litLimit = Math.round(ticks.length * progress / 100);
+
+	for (i = 0; i < ticks.length; i++) {
+		tick = ticks[i];
+		className = 'yandex-internetometer-svg-tick';
+		if (i % 24 === 0 || i === 74)
+			className += ' is-major';
+		if (data && data.running && i <= litLimit)
+			className += ' is-lit';
+		tick.setAttribute('class', className);
+	}
+}
+
+function updateMetricNode(node, selector, value, active) {
+	var metric = node.querySelector(selector);
+	var valueNode;
+
+	if (!metric)
+		return;
+
+	valueNode = metric.querySelector('.yandex-internetometer-speed-value');
+	if (valueNode && valueNode.textContent !== value)
+		valueNode.textContent = value;
+
+	if (active)
+		metric.classList.add('is-active');
+	else
+		metric.classList.remove('is-active');
+}
+
+function updateStatusInPlace(data) {
+	var phaseTextNode, phase, values, rows, i, strongNode;
+
+	if (!statusBox || !statusBox.firstElementChild)
+		return false;
+
+	phase = activePhase(data);
+	phaseTextNode = statusBox.querySelector('.yandex-internetometer-phase-text');
+	if (phaseTextNode)
+		phaseTextNode.textContent = data && data.running ? runningPhase(data, runningElapsed(data)) : gaugeStateText(data);
+
+	updateSpeedometerTicks(statusBox, data);
+	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-download', hasValue(data.download_mbps) ? metricNumber(data.download_mbps) : '--', phase === 'download');
+	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-upload', hasValue(data.upload_mbps) ? metricNumber(data.upload_mbps) : '--', phase === 'upload');
+	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-ping', hasValue(data.ping_ms) ? metricNumber(data.ping_ms) : '--', phase === 'ping' || phase === 'prepare');
+
+	values = detailValues(data);
+	rows = statusBox.querySelectorAll('.yandex-internetometer-detail-row');
+	for (i = 0; i < rows.length && i < values.length; i++) {
+		strongNode = rows[i].querySelector('strong');
+		if (strongNode && strongNode.textContent !== values[i])
+			strongNode.textContent = values[i];
+	}
+
+	return true;
+}
+
 function renderStatus(data) {
+	var nextLayoutKey;
+
 	statusData = data || {};
 	if (!statusData.running)
 		localStartedAt = null;
+
+	nextLayoutKey = renderStatusKey(statusData);
+	if (statusLayoutKey === nextLayoutKey && nextLayoutKey !== 'error' && updateStatusInPlace(statusData))
+		return;
+
+	statusLayoutKey = nextLayoutKey;
 
 	var children = [];
 
@@ -576,8 +677,8 @@ return view.extend({
 					'.yandex-internetometer-brandline{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;color:var(--yi-muted);font-size:13px}',
 					'.yandex-internetometer-brandline strong{font-size:16px;color:var(--yi-text);font-weight:700}',
 					'.yandex-internetometer-brandline span{text-align:right;overflow-wrap:anywhere}',
-					'.yandex-internetometer-oval{position:relative;width:min(1120px,100%);aspect-ratio:957/392;margin:0 auto;display:grid;place-items:center}',
-					'.yandex-internetometer-speedometer-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;animation:yi-enter .46s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-oval{position:relative;width:min(957px,100%);aspect-ratio:957/392;margin:0 auto;display:grid;place-items:center}',
+					'.yandex-internetometer-speedometer-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}',
 					'.yandex-internetometer-svg-tick{stroke:var(--yi-red);stroke-width:3.2;stroke-linecap:square;opacity:.98;transform-box:fill-box;transform-origin:center;transition:opacity .28s cubic-bezier(.22,1,.36,1),stroke-width .28s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-svg-tick.is-major{stroke-width:3.7}',
 					'.yandex-internetometer-speedometer-svg.is-running .yandex-internetometer-svg-tick{opacity:.88;animation:yi-tick-scan 1.8s cubic-bezier(.22,1,.36,1) infinite;animation-delay:calc(var(--i) * 12ms)}',
@@ -586,16 +687,16 @@ return view.extend({
 					'.yandex-internetometer-measure-button{position:relative;z-index:3;min-width:196px;min-height:50px;border:0;border-radius:11px;background:#fcdb32;color:#242424;font-size:18px;font-weight:700;cursor:pointer;box-shadow:none;transition:transform .2s cubic-bezier(.22,1,.36,1),background-color .2s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-measure-button:hover{background:#f5d21f;transform:translateY(-1px)}',
 					'.yandex-internetometer-speed-grid{position:absolute;z-index:2;inset:0}',
-					'.yandex-internetometer-speed-metric{position:absolute;top:52%;text-align:center;min-width:0;transform:translate(-50%,-50%);transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .3s cubic-bezier(.22,1,.36,1)}',
-					'.yandex-internetometer-speed-metric.is-download{left:25%}',
+					'.yandex-internetometer-speed-metric{position:absolute;top:52%;width:213px;text-align:center;min-width:0;transform:translate(-50%,-50%);transition:transform .3s cubic-bezier(.22,1,.36,1),opacity .3s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-speed-metric.is-download{left:24%}',
 					'.yandex-internetometer-speed-metric.is-upload{left:50%}',
 					'.yandex-internetometer-speed-metric.is-ping{left:76%}',
 					'.yandex-internetometer-speed-metric.is-active{transform:translate(-50%,calc(-50% - 4px))}',
-					'.yandex-internetometer-speed-label{display:flex;align-items:center;justify-content:center;gap:7px;font-size:24px;line-height:1.2;color:var(--yi-text);font-weight:700;white-space:nowrap}',
-					'.yandex-internetometer-speed-label b{display:inline-grid;place-items:center;width:19px;height:19px;border-radius:50%;background:var(--yi-text);color:var(--yi-bg);font-size:13px;line-height:1;font-weight:800}',
+					'.yandex-internetometer-speed-label{display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;line-height:1.2;color:var(--yi-text);font-weight:500;white-space:nowrap}',
+					'.yandex-internetometer-speed-label b{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:var(--yi-text);color:var(--yi-bg);font-size:10px;line-height:1;font-weight:800}',
 					'.yandex-internetometer-speed-label b:empty{display:none}',
-					'.yandex-internetometer-speed-value{font-size:clamp(56px,5.4vw,92px);line-height:1.02;font-weight:400;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin-top:14px;transition:opacity .2s cubic-bezier(.22,1,.36,1)}',
-					'.yandex-internetometer-speed-unit{font-size:25px;line-height:1.15;font-weight:700;color:var(--yi-text);margin-top:11px}',
+					'.yandex-internetometer-speed-value{font-size:64px;line-height:1;font-weight:400;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin:8px 0;transition:opacity .2s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-speed-unit{font-size:17px;line-height:1.2;font-weight:500;color:var(--yi-text)}',
 					'.yandex-internetometer-stages{width:min(720px,100%);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}',
 					'.yandex-internetometer-stage-pill{display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--yi-border);border-radius:8px;padding:8px 9px;text-align:center;font-size:12px;color:var(--yi-muted);background:rgba(255,255,255,.54);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background-color .2s cubic-bezier(.22,1,.36,1),border-color .2s cubic-bezier(.22,1,.36,1),color .2s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-stage-dot{width:7px;height:7px;border-radius:50%;background:rgba(35,35,35,.22);flex:0 0 auto}',
@@ -609,10 +710,9 @@ return view.extend({
 					'.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:0}',
 					'.yandex-internetometer-detail-row span{font-size:12px;color:var(--yi-muted);white-space:nowrap}',
 					'.yandex-internetometer-detail-row strong{font-size:13px;color:var(--yi-text);font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}',
-					'@keyframes yi-enter{from{opacity:.45;transform:scale(.985)}to{opacity:1;transform:scale(1)}}',
 					'@keyframes yi-tick-scan{0%,100%{opacity:.86}45%{opacity:1}70%{opacity:.94}}',
-					'@media (max-width:900px){.yandex-internetometer-speed-label{font-size:18px}.yandex-internetometer-speed-value{font-size:clamp(42px,5.8vw,56px)}.yandex-internetometer-speed-unit{font-size:18px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
-					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:36px;margin-top:5px}.yandex-internetometer-speed-unit{font-size:15px;margin-top:4px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}}',
+					'@media (max-width:900px){.yandex-internetometer-speed-metric{width:160px}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:48px}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
+					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}}',
 				].join('')),
 				E('h2', {}, T('Yandex Internetometer')),
 				E('p', {}, T('Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software.')),

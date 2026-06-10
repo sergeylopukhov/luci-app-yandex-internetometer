@@ -92,6 +92,13 @@ Hotfix `0.0.1-r14`:
 - changes the running animation to a subtle red tick scan instead of fading large parts of the scale;
 - keeps project version `0.0.1`, package release is `r14`.
 
+Hotfix `0.0.1-r15`:
+
+- stops recreating the whole speedometer DOM on every one-second polling update, so numbers and tick animations no longer blink;
+- matches the saved Yandex Internetometer page sizing more closely: `957px` desktop speedometer, `64px` desktop values, and `213px` metric blocks;
+- removes the first-render SVG scale animation that restarted during polling in earlier builds;
+- keeps project version `0.0.1`, package release is `r15`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
