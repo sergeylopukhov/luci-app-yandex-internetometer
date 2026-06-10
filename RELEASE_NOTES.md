@@ -85,6 +85,13 @@ Hotfix `0.0.1-r13`:
 - moves the Start test action into the speedometer area and removes the generic stage strip for a closer Yandex Internetometer layout;
 - keeps project version `0.0.1`, package release is `r13`.
 
+Hotfix `0.0.1-r14`:
+
+- replaces the previous HTML tick imitation with an SVG speedometer using the same wide `957x392` geometry as the Yandex Internetometer reference;
+- positions the three large result metrics inside the oval like the Yandex result screen, without number overlap;
+- changes the running animation to a subtle red tick scan instead of fading large parts of the scale;
+- keeps project version `0.0.1`, package release is `r14`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
