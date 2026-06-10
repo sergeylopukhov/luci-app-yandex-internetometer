@@ -365,7 +365,9 @@ measure_upload() {
 	ping="$5"
 	jitter="$6"
 	download="$7"
+	payload="${out}.payload"
 	: > "$out"
+	head -c "$UPLOAD_SIZE" /dev/zero > "$payload" || fail "Unable to prepare upload payload"
 	start_time="$(date +%s)"
 	end_time=$(( start_time + UPLOAD_TIME ))
 	i="1"
@@ -381,13 +383,13 @@ measure_upload() {
 				[ "$remaining" -gt 0 ] || break
 				max_time="$remaining"
 				[ "$max_time" -le "$UPLOAD_REQUEST_MAX_TIME" ] || max_time="$UPLOAD_REQUEST_MAX_TIME"
-				head -c "$UPLOAD_SIZE" /dev/zero | curl -fsS -o /dev/null \
+				curl -fsS -o /dev/null \
 					--connect-timeout 5 \
 					--max-time "$max_time" \
 					-H "Referer: $REFERER" \
 					-H "User-Agent: $USER_AGENT" \
 					-H "Content-Type: application/octet-stream" \
-					--data-binary @- \
+					--data-binary "@$payload" \
 					-w '%{size_upload}\n' \
 					"$url" 2>>"$LOG_FILE" >> "$out" || true
 			done

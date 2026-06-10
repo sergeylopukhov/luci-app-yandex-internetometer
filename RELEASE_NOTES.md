@@ -108,6 +108,12 @@ Hotfix `0.0.1-r16`:
 - creates the progress overlay SVG with `document.createElementNS()` to avoid LuCI HTML namespace rendering bugs;
 - keeps project version `0.0.1`, package release is `r16`.
 
+Hotfix `0.0.1-r17`:
+
+- prepares the upload test payload once in the temporary run directory before the upload timer starts;
+- makes upload requests read that prepared payload file directly instead of generating `/dev/zero` through a pipe during the measurement;
+- keeps project version `0.0.1`, package release is `r17`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
