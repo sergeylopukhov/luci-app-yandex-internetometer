@@ -334,6 +334,33 @@ function detailValues(data) {
 	];
 }
 
+function svgNode(name, attrs, children) {
+	var node = document.createElementNS('http://www.w3.org/2000/svg', name);
+	var key;
+
+	attrs = attrs || {};
+	for (key in attrs) {
+		if (attrs[key] !== null && attrs[key] !== undefined)
+			node.setAttribute(key, attrs[key]);
+	}
+
+	if (children !== null && children !== undefined) {
+		if (!Array.isArray(children))
+			children = [children];
+
+		children.forEach(function(child) {
+			if (child === null || child === undefined || child === '')
+				return;
+			if (typeof child === 'string')
+				node.appendChild(document.createTextNode(child));
+			else
+				node.appendChild(child);
+		});
+	}
+
+	return node;
+}
+
 function renderSpeedometerSvg(progress, running) {
 	var ticks = [];
 	var total = 154;
@@ -396,7 +423,7 @@ function renderSpeedometerSvg(progress, running) {
 		y1 = y2 + ny * length;
 		className = 'yandex-internetometer-svg-tick' + (major ? ' is-major' : '');
 
-		ticks.push(E('line', {
+		ticks.push(svgNode('line', {
 			'class': className,
 			'style': '--i:%s'.format(i),
 			'x1': x1.toFixed(2),
@@ -406,22 +433,22 @@ function renderSpeedometerSvg(progress, running) {
 		}));
 	}
 
-	return E('svg', {
+	return svgNode('svg', {
 		'class': 'yandex-internetometer-speedometer-svg' + (running ? ' is-running' : ''),
 		'viewBox': '0 0 957 392',
 		'role': 'img',
 		'aria-label': T('Yandex Internetometer')
 	}, [
-		running ? E('path', {
+		running ? svgNode('path', {
 			'class': 'yandex-internetometer-progress-path',
 			'd': 'M 208 18 H 749 A 174 178 0 0 1 749 374 H 208 A 174 178 0 0 1 208 18',
 			'pathLength': '100',
 			'style': 'stroke-dasharray:%s 100'.format(progressValue)
 		}) : '',
-		E('g', { 'class': 'yandex-internetometer-svg-ticks' }, ticks),
-		E('text', { 'class': 'yandex-internetometer-svg-label is-top', 'x': '478.5', 'y': '92', 'text-anchor': 'middle' }, '100'),
-		E('text', { 'class': 'yandex-internetometer-svg-label is-zero', 'x': '356', 'y': '374', 'text-anchor': 'middle' }, '0'),
-		E('text', { 'class': 'yandex-internetometer-svg-label is-max', 'x': '604', 'y': '374', 'text-anchor': 'middle' }, '1000')
+		svgNode('g', { 'class': 'yandex-internetometer-svg-ticks' }, ticks),
+		svgNode('text', { 'class': 'yandex-internetometer-svg-label is-top', 'x': '478.5', 'y': '92', 'text-anchor': 'middle' }, '100'),
+		svgNode('text', { 'class': 'yandex-internetometer-svg-label is-zero', 'x': '356', 'y': '374', 'text-anchor': 'middle' }, '0'),
+		svgNode('text', { 'class': 'yandex-internetometer-svg-label is-max', 'x': '604', 'y': '374', 'text-anchor': 'middle' }, '1000')
 	]);
 }
 

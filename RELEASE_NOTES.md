@@ -101,6 +101,11 @@ Hotfix `0.0.1-r15`:
 - adds a LuCI/backend setting for latency sample count, defaulting to 10 and allowing 10-50 samples;
 - keeps project version `0.0.1`, package release is `r15`.
 
+Hotfix `0.0.1-r16`:
+
+- creates the speedometer SVG with `document.createElementNS()` instead of LuCI HTML nodes, fixing the missing scale and stray `10001000` text in LuCI;
+- keeps project version `0.0.1`, package release is `r16`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.
