@@ -78,6 +78,13 @@ Hotfix `0.0.1-r12`:
 - uses time to first byte for latency samples to avoid counting a new TCP/TLS handshake in every ping sample;
 - keeps project version `0.0.1`, package release is `r12`.
 
+Hotfix `0.0.1-r13`:
+
+- updates ping progress after each of the 10 latency samples instead of only after the full series;
+- exposes `latency_samples` in the status JSON and LuCI details;
+- moves the Start test action into the speedometer area and removes the generic stage strip for a closer Yandex Internetometer layout;
+- keeps project version `0.0.1`, package release is `r13`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.

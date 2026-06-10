@@ -52,6 +52,7 @@ var translations = {
 		'Unable to execute backend command': 'Не удалось выполнить backend-команду',
 		'Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software.': 'Неофициальный совместимый с Яндекс Интернетометром тест скорости через probe-серверы Яндекса. Это не официальное ПО Яндекса.',
 		'Outgoing': 'Исходящая',
+		'Ping samples': 'Замеров задержки',
 		'Upload': 'Загрузка',
 		'Upload duration': 'Длительность исходящего теста',
 		'Upload payload size': 'Размер исходящего payload',
@@ -125,6 +126,7 @@ function statusCall(command) {
 			jitter_ms: null,
 			phase: null,
 			streams: null,
+			latency_samples: null,
 			download_time: null,
 			upload_time: null,
 			upload_enabled: 1,
@@ -352,16 +354,49 @@ function speedMetric(className, label, icon, value, unit, active) {
 	]);
 }
 
+function startTest() {
+	var optimistic = Object.assign({}, statusData || {}, {
+		ok: true,
+		running: true,
+		timestamp: new Date().toISOString(),
+		download_mbps: null,
+		upload_mbps: null,
+		ping_ms: null,
+		jitter_ms: null,
+		phase: 'prepare',
+		error: null
+	});
+
+	localStartedAt = Date.now();
+	renderStatus(optimistic);
+
+	return statusCall('start').then(function(data) {
+		if (!data || data.error)
+			return renderStatus(data);
+
+		data.running = true;
+		if (!data.timestamp)
+			data.timestamp = optimistic.timestamp;
+
+		renderStatus(data);
+
+		window.setTimeout(function() {
+			statusCall('status').then(renderStatus);
+		}, 1000);
+	});
+}
+
 function renderHero(data) {
 	var progress = gaugeProgress(data);
 	var elapsed = runningElapsed(data);
 	var phaseText = data && data.running ? runningPhase(data, elapsed) : gaugeStateText(data);
 	var phase = activePhase(data);
 	var runningClass = data && data.running ? ' is-running' : '';
+	var readyClass = !data.running && !hasResult(data) ? ' is-ready' : '';
 	var tickProgress = Math.max(0, Math.min(100, progress));
 
 	return E('div', {
-		'class': 'cbi-section yandex-internetometer-hero' + runningClass,
+		'class': 'cbi-section yandex-internetometer-hero' + runningClass + readyClass,
 		'style': '--yi-progress:%s%%'.format(tickProgress)
 	}, [
 		E('div', { 'class': 'yandex-internetometer-brandline' }, [
@@ -373,15 +408,19 @@ function renderHero(data) {
 			E('div', { 'class': 'yandex-internetometer-scale-label is-top' }, '100'),
 			E('div', { 'class': 'yandex-internetometer-scale-label is-zero' }, '0'),
 			E('div', { 'class': 'yandex-internetometer-scale-label is-max' }, '1000'),
-			E('div', { 'class': 'yandex-internetometer-speed-grid' }, [
+			!data.running && !hasResult(data) ? E('button', {
+				'type': 'button',
+				'class': 'yandex-internetometer-measure-button',
+				'click': startTest
+			}, T('Start test')) : E('div', { 'class': 'yandex-internetometer-speed-grid' }, [
 				speedMetric('is-download', T('Incoming'), '↓', hasValue(data.download_mbps) ? metricNumber(data.download_mbps) : '--', T('Mbps'), phase === 'download'),
 				speedMetric('is-upload', T('Outgoing'), '↑', hasValue(data.upload_mbps) ? metricNumber(data.upload_mbps) : '--', T('Mbps'), phase === 'upload'),
 				speedMetric('is-ping', T('Latency'), '', hasValue(data.ping_ms) ? metricNumber(data.ping_ms) : '--', T('ms'), phase === 'ping' || phase === 'prepare')
 			])
 		]),
-		renderStagePills(data),
 		E('div', { 'class': 'yandex-internetometer-details' }, [
 			detailRow(T('Jitter'), emptyValue(data.jitter_ms, T('ms'))),
+			detailRow(T('Ping samples'), emptyValue(data.latency_samples)),
 			detailRow(T('Streams'), emptyValue(data.streams)),
 			detailRow(T('Probe servers'), emptyValue(data.probe_count)),
 			detailRow(T('Server'), emptyValue(data.server)),
@@ -417,41 +456,13 @@ function renderActions() {
 
 	actionBox.innerHTML = '';
 
-	actionBox.appendChild(E('button', {
-		'type': 'button',
-		'class': 'btn cbi-button cbi-button-action',
-		'click': function() {
-			var optimistic = Object.assign({}, statusData || {}, {
-				ok: true,
-				running: true,
-				timestamp: new Date().toISOString(),
-				download_mbps: null,
-				upload_mbps: null,
-				ping_ms: null,
-				jitter_ms: null,
-				phase: 'prepare',
-				error: null
-			});
-
-			localStartedAt = Date.now();
-			renderStatus(optimistic);
-
-			return statusCall('start').then(function(data) {
-				if (!data || data.error)
-					return renderStatus(data);
-
-				data.running = true;
-				if (!data.timestamp)
-					data.timestamp = optimistic.timestamp;
-
-				renderStatus(data);
-
-				window.setTimeout(function() {
-					statusCall('status').then(renderStatus);
-				}, 1000);
-			});
-		}
-	}, hasResult(statusData) ? T('Run again') : T('Start test')));
+	if (statusData && (statusData.running || hasResult(statusData))) {
+		actionBox.appendChild(E('button', {
+			'type': 'button',
+			'class': 'btn cbi-button cbi-button-action',
+			'click': startTest
+		}, hasResult(statusData) ? T('Run again') : T('Start test')));
+	}
 
 	if (statusData && statusData.running) {
 		actionBox.appendChild(E('button', {
@@ -542,23 +553,25 @@ return view.extend({
 					'.yandex-internetometer-brandline{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;color:var(--yi-muted);font-size:13px}',
 					'.yandex-internetometer-brandline strong{font-size:16px;color:var(--yi-text);font-weight:700}',
 					'.yandex-internetometer-brandline span{text-align:right;overflow-wrap:anywhere}',
-					'.yandex-internetometer-oval{position:relative;width:min(980px,100%);aspect-ratio:2.35/1;margin:0 auto;display:grid;place-items:center}',
+					'.yandex-internetometer-oval{position:relative;width:min(1040px,100%);aspect-ratio:2.44/1;margin:0 auto;display:grid;place-items:center}',
 					'.yandex-internetometer-ticks{position:absolute;inset:0;animation:yi-enter .45s cubic-bezier(.22,1,.36,1)}',
-					'.yandex-internetometer-tick{position:absolute;width:3px;height:31px;border-radius:999px;background:var(--yi-red);opacity:.92;transition:height .22s cubic-bezier(.22,1,.36,1),opacity .22s cubic-bezier(.22,1,.36,1)}',
-					'.yandex-internetometer-tick.is-major{height:52px;width:3px}',
+					'.yandex-internetometer-tick{position:absolute;width:3px;height:34px;border-radius:999px;background:var(--yi-red);opacity:.96;transition:height .22s cubic-bezier(.22,1,.36,1),opacity .22s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-tick.is-major{height:58px;width:3px}',
 					'.yandex-internetometer-hero.is-running .yandex-internetometer-tick{animation:yi-tick-breathe 1.2s cubic-bezier(.22,1,.36,1) infinite}',
 					'.yandex-internetometer-scale-label{position:absolute;color:var(--yi-red);font-size:24px;line-height:1;font-weight:500}',
 					'.yandex-internetometer-scale-label.is-top{top:20.5%;left:50%;transform:translateX(-50%)}',
 					'.yandex-internetometer-scale-label.is-zero{bottom:10.5%;left:35.4%}',
 					'.yandex-internetometer-scale-label.is-max{bottom:10.5%;left:58.2%;transform:translateX(-50%)}',
-					'.yandex-internetometer-speed-grid{position:relative;z-index:2;width:min(720px,78%);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:34px;align-items:center;justify-items:center}',
+					'.yandex-internetometer-measure-button{position:relative;z-index:3;min-width:196px;min-height:50px;border:0;border-radius:11px;background:#fcdb32;color:#242424;font-size:18px;font-weight:700;cursor:pointer;box-shadow:none;transition:transform .2s cubic-bezier(.22,1,.36,1),background-color .2s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-measure-button:hover{background:#f5d21f;transform:translateY(-1px)}',
+					'.yandex-internetometer-speed-grid{position:relative;z-index:2;width:min(780px,78%);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px;align-items:center;justify-items:center}',
 					'.yandex-internetometer-speed-metric{text-align:center;min-width:0;transition:transform .22s cubic-bezier(.22,1,.36,1),opacity .22s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-speed-metric.is-active{transform:translateY(-3px)}',
-					'.yandex-internetometer-speed-label{display:flex;align-items:center;justify-content:center;gap:7px;font-size:21px;line-height:1.2;color:var(--yi-text);font-weight:700;white-space:nowrap}',
+					'.yandex-internetometer-speed-label{display:flex;align-items:center;justify-content:center;gap:7px;font-size:24px;line-height:1.2;color:var(--yi-text);font-weight:700;white-space:nowrap}',
 					'.yandex-internetometer-speed-label b{display:inline-grid;place-items:center;width:19px;height:19px;border-radius:50%;background:var(--yi-text);color:var(--yi-bg);font-size:13px;line-height:1;font-weight:800}',
 					'.yandex-internetometer-speed-label b:empty{display:none}',
-					'.yandex-internetometer-speed-value{font-size:72px;line-height:1.02;font-weight:500;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin-top:14px}',
-					'.yandex-internetometer-speed-unit{font-size:22px;line-height:1.15;font-weight:700;color:var(--yi-text);margin-top:12px}',
+					'.yandex-internetometer-speed-value{font-size:92px;line-height:1.02;font-weight:500;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin-top:14px}',
+					'.yandex-internetometer-speed-unit{font-size:25px;line-height:1.15;font-weight:700;color:var(--yi-text);margin-top:12px}',
 					'.yandex-internetometer-stages{width:min(720px,100%);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}',
 					'.yandex-internetometer-stage-pill{display:flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--yi-border);border-radius:8px;padding:8px 9px;text-align:center;font-size:12px;color:var(--yi-muted);background:rgba(255,255,255,.54);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background-color .2s cubic-bezier(.22,1,.36,1),border-color .2s cubic-bezier(.22,1,.36,1),color .2s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-stage-dot{width:7px;height:7px;border-radius:50%;background:rgba(35,35,35,.22);flex:0 0 auto}',
@@ -567,13 +580,14 @@ return view.extend({
 					'.yandex-internetometer-stage-pill.is-done{color:var(--yi-text)}',
 					'.yandex-internetometer-stage-pill.is-done .yandex-internetometer-stage-dot{background:var(--yi-green)}',
 					'.yandex-internetometer-details{width:min(720px,100%);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;border:1px solid var(--yi-border);border-radius:8px;overflow:hidden;background:rgba(255,255,255,.5)}',
+					'.yandex-internetometer-hero.is-ready .yandex-internetometer-details{display:none}',
 					'.yandex-internetometer-detail-row{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;background:rgba(255,255,255,.58);min-width:0;border-bottom:1px solid var(--yi-border)}',
 					'.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:0}',
 					'.yandex-internetometer-detail-row span{font-size:12px;color:var(--yi-muted);white-space:nowrap}',
 					'.yandex-internetometer-detail-row strong{font-size:13px;color:var(--yi-text);font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}',
 					'@keyframes yi-enter{from{opacity:.45;transform:scale(.985)}to{opacity:1;transform:scale(1)}}',
 					'@keyframes yi-tick-breathe{0%,100%{opacity:.78}50%{opacity:1}}',
-					'@media (max-width:900px){.yandex-internetometer-speed-grid{gap:18px;width:82%}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:50px}.yandex-internetometer-speed-unit{font-size:18px}.yandex-internetometer-scale-label{font-size:20px}.yandex-internetometer-tick{height:24px}.yandex-internetometer-tick.is-major{height:42px}}',
+					'@media (max-width:900px){.yandex-internetometer-speed-grid{gap:18px;width:82%}.yandex-internetometer-speed-label{font-size:18px}.yandex-internetometer-speed-value{font-size:56px}.yandex-internetometer-speed-unit{font-size:18px}.yandex-internetometer-scale-label{font-size:20px}.yandex-internetometer-tick{height:24px}.yandex-internetometer-tick.is-major{height:42px}}',
 					'@media (max-width:680px){.yandex-internetometer-hero{padding:18px 10px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1}.yandex-internetometer-speed-grid{width:72%;grid-template-columns:1fr;gap:10px}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:36px;margin-top:5px}.yandex-internetometer-speed-unit{font-size:15px;margin-top:4px}.yandex-internetometer-scale-label{display:none}.yandex-internetometer-tick{height:16px;width:2px}.yandex-internetometer-tick.is-major{height:28px}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}}',
 				].join('')),
 				E('h2', {}, T('Yandex Internetometer')),

@@ -84,6 +84,7 @@ json_result() {
 	json_download_time="$(json_uint_or_default "$DOWNLOAD_TIME" 10)"
 	json_upload_time="$(json_uint_or_default "$UPLOAD_TIME" 10)"
 	json_upload_enabled="$(json_uint_or_default "$UPLOAD_ENABLED" 1)"
+	json_latency_samples="$(json_uint_or_default "$LATENCY_SAMPLES" 10)"
 	json_probe_count="$(json_uint_or_default "$probe_count" 0)"
 	json_phase="$PROGRESS_PHASE"
 
@@ -100,6 +101,7 @@ json_result() {
 		--argjson download_time "$json_download_time" \
 		--argjson upload_time "$json_upload_time" \
 		--argjson upload_enabled "$json_upload_enabled" \
+		--argjson latency_samples "$json_latency_samples" \
 		--argjson probe_count "$json_probe_count" \
 		--arg server "$server" \
 		--arg error "$error" '
@@ -117,6 +119,7 @@ json_result() {
 			download_time: $download_time,
 			upload_time: $upload_time,
 			upload_enabled: $upload_enabled,
+			latency_samples: $latency_samples,
 			probe_count: $probe_count,
 			server: (if $server == "" or $server == "null" then null else $server end),
 			error: (if $error == "" or $error == "null" then null else $error end)
@@ -270,9 +273,7 @@ measure_latency() {
 	probes="$2"
 	server="$3"
 	url="$(latency_urls | sed -n '1p')"
-	series="$out.series"
 	: > "$out"
-	: > "$series"
 	write_progress "ping" true null null null null "$probes" "$server" null
 
 	[ -n "$url" ] || fail "No Yandex latency probes are available"
@@ -284,19 +285,20 @@ measure_latency() {
 		i=$((i + 1))
 	done
 
-	curl -fsS -o /dev/null \
+	(curl -fsS -o /dev/null \
 		--connect-timeout 3 \
 		--max-time $(( LATENCY_SAMPLES + 3 )) \
 		-H "Referer: $REFERER" \
 		-H "User-Agent: $USER_AGENT" \
 		-w '%{time_starttransfer}\n' \
-		"$@" 2>>"$LOG_FILE" >> "$series" || true
-
-	awk 'NR > 1 { print }' "$series" > "$out"
-	if [ -s "$out" ]; then
-		set -- $(latency_stats "$out")
-		write_progress "ping" true null null "$1" "$2" "$probes" "$server" null
-	fi
+		"$@" 2>>"$LOG_FILE" || true) | \
+		awk 'NR > 1 { print; fflush() }' | \
+		while IFS= read -r sample; do
+			[ -n "$sample" ] || continue
+			printf '%s\n' "$sample" >> "$out"
+			set -- $(latency_stats "$out")
+			write_progress "ping" true null null "$1" "$2" "$probes" "$server" null
+		done
 
 	[ -s "$out" ] || fail "Unable to measure latency"
 }
