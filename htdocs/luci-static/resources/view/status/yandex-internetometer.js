@@ -16,7 +16,7 @@ var metricDisplayValue = {};
 var languageStorageKey = 'yandexInternetometerLanguage';
 var translations = {
 	ru: {
-		'Bytes per upload request. The payload is streamed from /dev/zero and is not stored on flash.': 'Байт на один исходящий запрос. Данные идут потоком из /dev/zero и не сохраняются во flash.',
+		'Bytes per upload request. The payload is prepared in /tmp before measurement and is not stored on flash.': 'Байт на один исходящий запрос. Payload готовится в /tmp перед измерением и не сохраняется во flash.',
 		'Checking latency': 'Проверка задержки',
 		'Complete': 'Готово',
 		'Current stage: %s': 'Текущий этап: %s',
@@ -64,6 +64,8 @@ var translations = {
 		'Upload duration': 'Длительность исходящего теста',
 		'Upload payload size': 'Размер исходящего payload',
 		'Upload speed': 'Исходящая скорость',
+		'Upload stream count': 'Количество исходящих потоков',
+		'Upload streams': 'Исходящие потоки',
 		'Yandex Internetometer': 'Яндекс Интернетометр',
 		'ms': 'мс'
 	}
@@ -179,6 +181,7 @@ function statusCall(command) {
 			jitter_ms: null,
 			phase: null,
 			streams: null,
+			upload_streams: null,
 			latency_samples: null,
 			download_time: null,
 			upload_time: null,
@@ -373,6 +376,7 @@ function detailValues(data) {
 		emptyValue(data.jitter_ms, T('ms')),
 		emptyValue(data.latency_samples),
 		emptyValue(data.streams),
+		emptyValue(data.upload_streams),
 		emptyValue(data.probe_count),
 		emptyValue(data.server),
 		emptyValue(data.timestamp)
@@ -422,7 +426,7 @@ function renderSpeedometerSvg(progress, running) {
 		}, [
 			svgNode('path', {
 				'class': 'yandex-internetometer-progress-path',
-				'd': 'M 205 10 H 752 A 198 186 0 0 1 752 382 H 205 A 198 186 0 0 1 205 10',
+				'd': 'M 350 382 H 205 A 198 186 0 0 1 205 10 H 752 A 198 186 0 0 1 752 382 H 615',
 				'pathLength': '100',
 				'style': 'stroke-dasharray:%s 100'.format(progressValue)
 			})
@@ -541,9 +545,10 @@ function renderHero(data) {
 			detailRow(T('Jitter'), detailValues(data)[0]),
 			detailRow(T('Ping samples'), detailValues(data)[1]),
 			detailRow(T('Streams'), detailValues(data)[2]),
-			detailRow(T('Probe servers'), detailValues(data)[3]),
-			detailRow(T('Server'), detailValues(data)[4]),
-			detailRow(T('Last run'), detailValues(data)[5])
+			detailRow(T('Upload streams'), detailValues(data)[3]),
+			detailRow(T('Probe servers'), detailValues(data)[4]),
+			detailRow(T('Server'), detailValues(data)[5]),
+			detailRow(T('Last run'), detailValues(data)[6])
 		])
 	]);
 }
@@ -698,6 +703,16 @@ return view.extend({
 		o.datatype = 'range(1, 8)';
 		o.rmempty = false;
 
+		o = s.option(form.ListValue, 'upload_streams', T('Upload stream count'));
+		o.value('auto', 'auto');
+		o.value('1', '1');
+		o.value('2', '2');
+		o.value('4', '4');
+		o.value('8', '8');
+		o.value('12', '12');
+		o.default = 'auto';
+		o.rmempty = false;
+
 		o = s.option(form.Value, 'download_time', T('Download duration'));
 		o.datatype = 'range(1, 60)';
 		o.rmempty = false;
@@ -713,9 +728,9 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.option(form.Value, 'upload_size', T('Upload payload size'));
-		o.datatype = 'range(1024, 50000000)';
+		o.datatype = 'range(1024, 200000000)';
 		o.rmempty = false;
-		o.description = T('Bytes per upload request. The payload is streamed from /dev/zero and is not stored on flash.');
+		o.description = T('Bytes per upload request. The payload is prepared in /tmp before measurement and is not stored on flash.');
 
 		o = s.option(form.Flag, 'upload_enabled', T('Enable upload test'));
 		o.default = '1';

@@ -108,7 +108,7 @@ Hotfix `0.0.1-r16`:
 - creates the progress overlay SVG with `document.createElementNS()` to avoid LuCI HTML namespace rendering bugs;
 - keeps project version `0.0.1`, package release is `r16`.
 
-Hotfix `0.0.1-r18`:
+Hotfix `0.0.1-r19`:
 
 - prepares the upload test payload once in the temporary run directory before the upload timer starts;
 - makes upload requests read that prepared payload file directly instead of generating `/dev/zero` through a pipe during the measurement;
@@ -116,7 +116,8 @@ Hotfix `0.0.1-r18`:
 - animates live metric values and the outer speed progress path from the current running speed;
 - replaces the bottom progress/action controls with router public IPv4, a compact stop control, and an inline "run again" action;
 - moves the language control to the top-left corner and hides settings under a collapsed details block;
-- keeps project version `0.0.1`, package release is `r18`.
+- starts the outer progress path from the lower 0 marker instead of the upper-left corner;
+- keeps project version `0.0.1`, package release is `r19`.
 
 Assets:
 
