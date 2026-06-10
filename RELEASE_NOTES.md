@@ -122,6 +122,11 @@ Hotfix `0.0.1-r19`:
 - starts the outer progress path from the lower 0 marker instead of the upper-left corner;
 - keeps project version `0.0.1`, package release is `r19`.
 
+Hotfix `0.0.1-r20`:
+
+- rebuilds the APK repository from the current full source tree so the published package includes the latest backend, UI, config, and installer changes;
+- keeps project version `0.0.1`, package release is `r20`.
+
 Assets:
 
 - GitHub Pages APK repository for apk-based OpenWrt systems.

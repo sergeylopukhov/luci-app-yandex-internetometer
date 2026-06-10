@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-yandex-internetometer
 PKG_VERSION:=0.0.1
-PKG_RELEASE:=19
+PKG_RELEASE:=20
 
 PKG_MAINTAINER:=OpenWrt community
 PKG_LICENSE:=MIT
