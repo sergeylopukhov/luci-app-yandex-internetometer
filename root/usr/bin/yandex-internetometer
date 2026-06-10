@@ -13,9 +13,11 @@ REFERER="https://yandex.ru/internet/"
 USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36"
 
 STREAMS="8"
+UPLOAD_STREAMS="auto"
+EFFECTIVE_UPLOAD_STREAMS=""
 DOWNLOAD_TIME="10"
 UPLOAD_TIME="10"
-UPLOAD_SIZE="30720000"
+UPLOAD_SIZE="50000000"
 UPLOAD_ENABLED="1"
 DEBUG="0"
 JSON_MODE="0"
@@ -24,7 +26,7 @@ UPLOAD_REQUEST_MAX_TIME="10"
 LATENCY_SAMPLES="10"
 
 usage() {
-	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1] [--latency-samples N]"
+	printf '%s\n' "Usage: yandex-internetometer run [--json] [--debug] [--streams N] [--upload-streams auto|N] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1] [--latency-samples N]"
 	printf '%s\n' "       yandex-internetometer start|status|stop"
 }
 
@@ -82,6 +84,8 @@ json_result() {
 	error="$9"
 
 	json_streams="$(json_uint_or_default "$STREAMS" 8)"
+	json_upload_streams="$EFFECTIVE_UPLOAD_STREAMS"
+	[ -n "$json_upload_streams" ] || json_upload_streams="$UPLOAD_STREAMS"
 	json_download_time="$(json_uint_or_default "$DOWNLOAD_TIME" 10)"
 	json_upload_time="$(json_uint_or_default "$UPLOAD_TIME" 10)"
 	json_upload_enabled="$(json_uint_or_default "$UPLOAD_ENABLED" 1)"
@@ -97,6 +101,7 @@ json_result() {
 		--arg phase "$json_phase" \
 		--arg download "$download" \
 		--arg upload "$upload" \
+		--arg upload_streams "$json_upload_streams" \
 		--arg ping "$ping" \
 		--arg jitter "$jitter" \
 		--argjson streams "$json_streams" \
@@ -119,6 +124,7 @@ json_result() {
 			ping_ms: num_or_null($ping),
 			jitter_ms: num_or_null($jitter),
 			streams: $streams,
+			upload_streams: num_or_null($upload_streams),
 			download_time: $download_time,
 			upload_time: $upload_time,
 			upload_enabled: $upload_enabled,
@@ -178,6 +184,8 @@ load_config() {
 	if command -v uci >/dev/null 2>&1; then
 		value="$(uci -q get yandex-internetometer.main.streams 2>/dev/null)"
 		[ -n "$value" ] && STREAMS="$value"
+		value="$(uci -q get yandex-internetometer.main.upload_streams 2>/dev/null)"
+		[ -n "$value" ] && UPLOAD_STREAMS="$value"
 		value="$(uci -q get yandex-internetometer.main.download_time 2>/dev/null)"
 		[ -n "$value" ] && DOWNLOAD_TIME="$value"
 		value="$(uci -q get yandex-internetometer.main.upload_time 2>/dev/null)"
@@ -207,6 +215,11 @@ parse_run_args() {
 			--streams)
 				[ -n "$2" ] || fail "--streams requires a value"
 				STREAMS="$2"
+				shift 2
+				;;
+			--upload-streams)
+				[ -n "$2" ] || fail "--upload-streams requires a value"
+				UPLOAD_STREAMS="$2"
 				shift 2
 				;;
 			--download-time)
@@ -243,9 +256,13 @@ parse_run_args() {
 
 validate_settings() {
 	validate_uint_range "$STREAMS" 1 8 "streams"
+	case "$UPLOAD_STREAMS" in
+		auto) ;;
+		*) validate_uint_range "$UPLOAD_STREAMS" 1 12 "upload_streams" ;;
+	esac
 	validate_uint_range "$DOWNLOAD_TIME" 1 60 "download_time"
 	validate_uint_range "$UPLOAD_TIME" 1 60 "upload_time"
-	validate_uint_range "$UPLOAD_SIZE" 1024 50000000 "upload_size"
+	validate_uint_range "$UPLOAD_SIZE" 1024 200000000 "upload_size"
 	validate_uint_range "$LATENCY_SAMPLES" 10 50 "latency_samples"
 
 	case "$UPLOAD_ENABLED" in
@@ -380,6 +397,69 @@ measure_download() {
 	[ "$bytes" -gt 0 ] || fail "Unable to measure download speed"
 }
 
+run_upload_workers() {
+	out="$1"
+	urls="$2"
+	stream_count="$3"
+	duration="$4"
+	payload="$5"
+	i="1"
+
+	while [ "$i" -le "$stream_count" ]; do
+		(
+			url="$(sed -n "${i}p" "$urls")"
+			[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
+			repeat_limit=$(( duration * 6 ))
+			[ "$repeat_limit" -ge 12 ] || repeat_limit="12"
+			repeat="0"
+			set --
+			while [ "$repeat" -lt "$repeat_limit" ]; do
+				set -- "$@" -o /dev/null "$url"
+				repeat=$((repeat + 1))
+			done
+			curl -fsS \
+				--connect-timeout 5 \
+				--max-time "$duration" \
+				-H "Referer: $REFERER" \
+				-H "User-Agent: $USER_AGENT" \
+				-H "Content-Type: application/octet-stream" \
+				--data-binary "@$payload" \
+				-w '%{size_upload}\n' \
+				"$@" 2>>"$LOG_FILE" >> "$out" || true
+		) &
+		i=$((i + 1))
+	done
+
+	wait
+}
+
+select_upload_streams() {
+	urls="$1"
+	payload="$2"
+	best_streams="4"
+	best_bytes="0"
+
+	case "$UPLOAD_STREAMS" in
+		auto) ;;
+		*) printf '%s' "$UPLOAD_STREAMS"; return 0 ;;
+	esac
+
+	for candidate in 4 8 12; do
+		bench_out="${payload}.bench.${candidate}"
+		: > "$bench_out"
+		run_upload_workers "$bench_out" "$urls" "$candidate" 2 "$payload"
+		bytes="$(sum_file "$bench_out")"
+		debug_log "upload auto candidate streams=$candidate bytes=$bytes"
+		if [ "$bytes" -gt "$best_bytes" ]; then
+			best_bytes="$bytes"
+			best_streams="$candidate"
+		fi
+	done
+
+	debug_log "upload auto selected streams=$best_streams bytes=$best_bytes"
+	printf '%s' "$best_streams"
+}
+
 measure_upload() {
 	out="$1"
 	urls="$2"
@@ -391,36 +471,16 @@ measure_upload() {
 	payload="${out}.payload"
 	: > "$out"
 	head -c "$UPLOAD_SIZE" /dev/zero > "$payload" || fail "Unable to prepare upload payload"
+	write_progress "upload" true "$download" null "$ping" "$jitter" "$probes" "$server" null
+	EFFECTIVE_UPLOAD_STREAMS="$(select_upload_streams "$urls" "$payload")"
 	start_time="$(date +%s)"
 	end_time=$(( start_time + UPLOAD_TIME ))
-	i="1"
 	write_progress "upload" true "$download" null "$ping" "$jitter" "$probes" "$server" null
 
-	while [ "$i" -le "$STREAMS" ]; do
-		(
-			url="$(sed -n "${i}p" "$urls")"
-			[ -n "$url" ] || url="$(sed -n '1p' "$urls")"
-			while [ "$(date +%s)" -lt "$end_time" ]; do
-				now="$(date +%s)"
-				remaining=$(( end_time - now ))
-				[ "$remaining" -gt 0 ] || break
-				max_time="$remaining"
-				[ "$max_time" -le "$UPLOAD_REQUEST_MAX_TIME" ] || max_time="$UPLOAD_REQUEST_MAX_TIME"
-				curl -fsS -o /dev/null \
-					--connect-timeout 5 \
-					--max-time "$max_time" \
-					-H "Referer: $REFERER" \
-					-H "User-Agent: $USER_AGENT" \
-					-H "Content-Type: application/octet-stream" \
-					--data-binary "@$payload" \
-					-w '%{size_upload}\n' \
-					"$url" 2>>"$LOG_FILE" >> "$out" || true
-			done
-		) &
-		i=$((i + 1))
-	done
+	run_upload_workers "$out" "$urls" "$EFFECTIVE_UPLOAD_STREAMS" "$UPLOAD_TIME" "$payload" &
+	worker_pid="$!"
 
-	while [ "$(date +%s)" -lt "$end_time" ]; do
+	while kill -0 "$worker_pid" 2>/dev/null && [ "$(date +%s)" -lt "$end_time" ]; do
 		sleep 1
 		now="$(date +%s)"
 		elapsed=$(( now - start_time ))
@@ -430,7 +490,7 @@ measure_upload() {
 		write_progress "upload" true "$download" "$mbps" "$ping" "$jitter" "$probes" "$server" null
 	done
 
-	wait
+	wait "$worker_pid" 2>/dev/null || true
 
 	bytes="$(sum_file "$out")"
 	[ "$bytes" -gt 0 ] || fail "Unable to measure upload speed"
@@ -486,7 +546,7 @@ run_test() {
 	trap cleanup EXIT INT TERM
 
 	: > "$LOG_FILE"
-	debug_log "starting test streams=$STREAMS download_time=$DOWNLOAD_TIME upload_time=$UPLOAD_TIME upload_size=$UPLOAD_SIZE upload_enabled=$UPLOAD_ENABLED latency_samples=$LATENCY_SAMPLES"
+	debug_log "starting test streams=$STREAMS upload_streams=$UPLOAD_STREAMS download_time=$DOWNLOAD_TIME upload_time=$UPLOAD_TIME upload_size=$UPLOAD_SIZE upload_enabled=$UPLOAD_ENABLED latency_samples=$LATENCY_SAMPLES"
 	write_progress "prepare" true null null null null 0 null null
 	fetch_probes
 

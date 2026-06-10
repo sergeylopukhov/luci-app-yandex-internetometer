@@ -112,6 +112,9 @@ Hotfix `0.0.1-r19`:
 
 - prepares the upload test payload once in the temporary run directory before the upload timer starts;
 - makes upload requests read that prepared payload file directly instead of generating `/dev/zero` through a pipe during the measurement;
+- reuses HTTPS connections during upload by running one `curl` process per upload stream with a sequence of POST transfers;
+- raises the default upload payload to 50 MB now that payload generation is outside the timed measurement;
+- adds separate `upload_streams` support with `auto` selection across 4, 8, and 12 upload streams;
 - resets the main UI to the central measure button on page refresh instead of showing stale completed results;
 - animates live metric values and the outer speed progress path from the current running speed;
 - replaces the bottom progress/action controls with router public IPv4, a compact stop control, and an inline "run again" action;
