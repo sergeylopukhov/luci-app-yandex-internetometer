@@ -103,7 +103,9 @@ Hotfix `0.0.1-r15`:
 
 Hotfix `0.0.1-r16`:
 
-- creates the speedometer SVG with `document.createElementNS()` instead of LuCI HTML nodes, fixing the missing scale and stray `10001000` text in LuCI;
+- uses the saved Yandex Internetometer speedometer SVG as the static scale layer instead of trying to redraw the scale geometry manually;
+- keeps the local live values and router measurement logic, with a separate overlay for the running progress path;
+- creates the progress overlay SVG with `document.createElementNS()` to avoid LuCI HTML namespace rendering bugs;
 - keeps project version `0.0.1`, package release is `r16`.
 
 Assets:

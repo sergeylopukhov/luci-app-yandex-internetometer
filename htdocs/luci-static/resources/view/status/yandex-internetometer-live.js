@@ -362,93 +362,26 @@ function svgNode(name, attrs, children) {
 }
 
 function renderSpeedometerSvg(progress, running) {
-	var ticks = [];
-	var total = 154;
-	var left = 34;
-	var right = 923;
-	var top = 38;
-	var bottom = 354;
-	var cy = 196;
-	var rx = 174;
-	var ry = 158;
-	var leftCx = left + rx;
-	var rightCx = right - rx;
-	var straight = rightCx - leftCx;
-	var arc = Math.PI * Math.sqrt((rx * rx + ry * ry) / 2);
-	var perimeter = straight * 2 + arc * 2;
-	var outerOffset = 0;
-	var i, d, segment, t, x2, y2, nx, ny, major, length, x1, y1, className;
 	var progressValue = Math.max(0, Math.min(100, progress));
 
-	for (i = 0; i < total; i++) {
-		d = perimeter * i / total;
-		major = i % 24 === 0 || i === 77;
-		length = major ? 45 : 30;
-
-		if (d < straight) {
-			t = d / straight;
-			x2 = leftCx + straight * t;
-			y2 = top + outerOffset;
-			nx = 0;
-			ny = 1;
-		}
-		else if (d < straight + arc) {
-			segment = (d - straight) / arc;
-			t = -Math.PI / 2 + Math.PI * segment;
-			x2 = rightCx + rx * Math.cos(t);
-			y2 = cy + ry * Math.sin(t);
-			nx = -Math.cos(t);
-			ny = -Math.sin(t);
-		}
-		else if (d < straight * 2 + arc) {
-			segment = (d - straight - arc) / straight;
-			x2 = rightCx - straight * segment;
-			y2 = bottom - outerOffset;
-			nx = 0;
-			ny = -1;
-		}
-		else {
-			segment = (d - straight * 2 - arc) / arc;
-			t = Math.PI / 2 + Math.PI * segment;
-			x2 = leftCx + rx * Math.cos(t);
-			y2 = cy + ry * Math.sin(t);
-			nx = -Math.cos(t);
-			ny = -Math.sin(t);
-		}
-
-		if (y2 === bottom && x2 > 382 && x2 < 575)
-			continue;
-
-		x1 = x2 + nx * length;
-		y1 = y2 + ny * length;
-		className = 'yandex-internetometer-svg-tick' + (major ? ' is-major' : '');
-
-		ticks.push(svgNode('line', {
-			'class': className,
-			'style': '--i:%s'.format(i),
-			'x1': x1.toFixed(2),
-			'y1': y1.toFixed(2),
-			'x2': x2.toFixed(2),
-			'y2': y2.toFixed(2)
-		}));
-	}
-
-	return svgNode('svg', {
-		'class': 'yandex-internetometer-speedometer-svg' + (running ? ' is-running' : ''),
-		'viewBox': '0 0 957 392',
-		'role': 'img',
-		'aria-label': T('Yandex Internetometer')
-	}, [
-		running ? svgNode('path', {
-			'class': 'yandex-internetometer-progress-path',
-			'd': 'M 208 18 H 749 A 174 178 0 0 1 749 374 H 208 A 174 178 0 0 1 208 18',
-			'pathLength': '100',
-			'style': 'stroke-dasharray:%s 100'.format(progressValue)
-		}) : '',
-		svgNode('g', { 'class': 'yandex-internetometer-svg-ticks' }, ticks),
-		svgNode('text', { 'class': 'yandex-internetometer-svg-label is-top', 'x': '478.5', 'y': '92', 'text-anchor': 'middle' }, '100'),
-		svgNode('text', { 'class': 'yandex-internetometer-svg-label is-zero', 'x': '356', 'y': '374', 'text-anchor': 'middle' }, '0'),
-		svgNode('text', { 'class': 'yandex-internetometer-svg-label is-max', 'x': '604', 'y': '374', 'text-anchor': 'middle' }, '1000')
+	return E('div', { 'class': 'yandex-internetometer-speedometer-svg' + (running ? ' is-running' : '') }, [
+		E('img', {
+			'class': 'yandex-internetometer-speedometer-reference',
+			'src': '/luci-static/resources/yandex-internetometer/speedometer.svg',
+			'alt': ''
+		}),
+		running ? svgNode('svg', {
+			'class': 'yandex-internetometer-progress-svg',
+			'viewBox': '0 0 957 392',
+			'aria-hidden': 'true'
+		}, [
+			svgNode('path', {
+				'class': 'yandex-internetometer-progress-path',
+				'd': 'M 228 18 H 729 A 190 178 0 0 1 729 374 H 228 A 190 178 0 0 1 228 18',
+				'pathLength': '100',
+				'style': 'stroke-dasharray:%s 100'.format(progressValue)
+			})
+		]) : ''
 	]);
 }
 
@@ -568,15 +501,13 @@ function renderStatusKey(data) {
 }
 
 function updateSpeedometerTicks(node, data) {
-	var svg = node.querySelector('.yandex-internetometer-speedometer-svg');
+	var svg = node.querySelector('.yandex-internetometer-progress-svg');
 	var progressPath, progress;
 
 	if (!svg)
 		return;
 
 	progress = Math.max(0, Math.min(100, gaugeProgress(data)));
-	svg.className.baseVal = 'yandex-internetometer-speedometer-svg' + (data && data.running ? ' is-running' : '');
-
 	progressPath = svg.querySelector('.yandex-internetometer-progress-path');
 	if (progressPath)
 		progressPath.setAttribute('style', 'stroke-dasharray:%s 100'.format(progress));
@@ -778,6 +709,8 @@ return view.extend({
 					'.yandex-internetometer-brandline span{text-align:right;overflow-wrap:anywhere}',
 					'.yandex-internetometer-oval{position:relative;width:min(957px,100%);aspect-ratio:957/392;margin:0 auto;display:grid;place-items:center}',
 					'.yandex-internetometer-speedometer-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}',
+					'.yandex-internetometer-speedometer-reference{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain}',
+					'.yandex-internetometer-progress-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}',
 					'.yandex-internetometer-progress-path{fill:none;stroke:var(--yi-red);stroke-width:8;stroke-linecap:butt;opacity:1;transition:stroke-dasharray .55s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-svg-tick{stroke:var(--yi-red);stroke-width:3.2;stroke-linecap:square;opacity:.98;transform-box:fill-box;transform-origin:center;transition:opacity .28s cubic-bezier(.22,1,.36,1),stroke-width .28s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-svg-tick.is-major{stroke-width:3.7}',
