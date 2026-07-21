@@ -173,6 +173,7 @@ function animateValue(key, target, duration, onFrame) {
 	if (target === null || target === undefined || isNaN(target)) {
 		if (metricAnimationFrame[key])
 			window.cancelAnimationFrame(metricAnimationFrame[key]);
+		metricAnimationFrame[key] = null;
 		metricDisplayValue[key] = null;
 		onFrame(null);
 		return;
@@ -180,15 +181,14 @@ function animateValue(key, target, duration, onFrame) {
 
 	if (start === null || start === undefined || isNaN(start))
 		start = target;
+	if (metricAnimationFrame[key])
+		window.cancelAnimationFrame(metricAnimationFrame[key]);
+	metricAnimationFrame[key] = null;
 	if (duration <= 0) {
 		metricDisplayValue[key] = target;
 		onFrame(target);
 		return;
 	}
-
-	if (metricAnimationFrame[key])
-		window.cancelAnimationFrame(metricAnimationFrame[key]);
-
 	function frame() {
 		var elapsed = Date.now() - startedAt;
 		var progress = Math.min(1, elapsed / duration);
@@ -199,6 +199,8 @@ function animateValue(key, target, duration, onFrame) {
 
 		if (progress < 1)
 			metricAnimationFrame[key] = window.requestAnimationFrame(frame);
+		else
+			metricAnimationFrame[key] = null;
 	}
 
 	frame();
@@ -887,8 +889,7 @@ return view.extend({
 					'.yandex-internetometer-speed-label b{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:var(--yi-text);color:var(--yi-bg);font-size:10px;line-height:1;font-weight:800}',
 					'.yandex-internetometer-speed-label b:empty{display:none}',
 					'.yandex-internetometer-speed-value{font-size:64px;line-height:1;font-weight:400;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin:8px 0;transition:opacity .2s cubic-bezier(.22,1,.36,1)}',
-					'.yandex-internetometer-hero.is-running .yandex-internetometer-speed-value{color:rgba(0,0,0,.3)}',
-					'.yandex-internetometer-hero.is-running .yandex-internetometer-speed-metric.is-active .yandex-internetometer-speed-value{color:var(--yi-red)}',
+					'.yandex-internetometer-hero.is-running .yandex-internetometer-speed-value{color:var(--yi-red)}',
 					'.yandex-internetometer-speed-unit{font-size:17px;line-height:1.2;font-weight:500;color:var(--yi-text)}',
 					'.yandex-internetometer-session-row{display:flex;align-items:center;justify-content:center;gap:16px;min-height:36px;color:var(--yi-text);font-size:16px;line-height:1.2;flex-wrap:wrap}',
 					'.yandex-internetometer-router-ip{display:flex;align-items:center;gap:8px;color:var(--yi-muted)}',
