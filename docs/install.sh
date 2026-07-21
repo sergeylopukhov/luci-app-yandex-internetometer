@@ -1,12 +1,12 @@
 #!/bin/sh
-# luci-app-yandex-internetometer installer 1.0.2
+# luci-app-yandex-internetometer installer 1.0.3
 set -eu
 PKG=luci-app-yandex-internetometer; BASE=https://sergeylopukhov.github.io/luci-app-yandex-internetometer; VERSION_URL=$BASE/version.json; YES=0; FORCE=0
 case "${INSTALLER_LANG:-${LANG:-ru}}" in *ru*|*RU*) RU=1;; *) RU=0;; esac
 say() { [ "$RU" = 1 ] && printf '%s\n' "$1" || printf '%s\n' "$2"; }
 die() { say "Ошибка: $1" "Error: $1" >&2; exit 1; }
 help() { printf '%s\n' "Использование: sh install.sh [--yes] [--force] [--version] [--help]" "--yes: безопасные значения без вопросов; --force: переустановка или downgrade."; }
-while [ "$#" -gt 0 ]; do case "$1" in --yes) YES=1;; --force) FORCE=1;; --version) printf '1.0.2\n'; exit 0;; --help) help; exit 0;; *) die "неизвестный аргумент: $1";; esac; shift; done
+while [ "$#" -gt 0 ]; do case "$1" in --yes) YES=1;; --force) FORCE=1;; --version) printf '1.0.3\n'; exit 0;; --help) help; exit 0;; *) die "неизвестный аргумент: $1";; esac; shift; done
 [ "$(id -u)" = 0 ] || die 'запустите установщик от root'; [ -r /etc/openwrt_release ] || [ -r /etc/os-release ] || die 'нужен OpenWrt'
 command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || die 'нужен curl или wget с HTTPS'
 TMP="$(mktemp -d /tmp/yandex-internetometer.XXXXXX)" || die 'не удалось создать временный каталог'; trap 'rm -rf "$TMP"' EXIT INT TERM
