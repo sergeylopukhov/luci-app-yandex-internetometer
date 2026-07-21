@@ -14,6 +14,7 @@ var statusLayoutKey = null;
 var updateData = null;
 var metricAnimationFrame = {};
 var metricDisplayValue = {};
+var metricSmoothedValue = {};
 var languageStorageKey = 'yandexInternetometerLanguage';
 var translations = {
 	ru: {
@@ -138,8 +139,8 @@ function metricFloat(value) {
 	return isNaN(number) ? null : number;
 }
 
-function easeOutQuart(value) {
-	return 1 - Math.pow(1 - value, 4);
+function easeInOutSine(value) {
+	return -(Math.cos(Math.PI * value) - 1) / 2;
 }
 
 function animateValue(key, target, duration, onFrame) {
@@ -156,6 +157,11 @@ function animateValue(key, target, duration, onFrame) {
 
 	if (start === null || start === undefined || isNaN(start))
 		start = target;
+	if (duration <= 0) {
+		metricDisplayValue[key] = target;
+		onFrame(target);
+		return;
+	}
 
 	if (metricAnimationFrame[key])
 		window.cancelAnimationFrame(metricAnimationFrame[key]);
@@ -163,7 +169,7 @@ function animateValue(key, target, duration, onFrame) {
 	function frame() {
 		var elapsed = Date.now() - startedAt;
 		var progress = Math.min(1, elapsed / duration);
-		var value = start + (target - start) * easeOutQuart(progress);
+		var value = start + (target - start) * easeInOutSine(progress);
 
 		metricDisplayValue[key] = value;
 		onFrame(value);
@@ -540,6 +546,7 @@ function startTest() {
 	localStartedAt = Date.now();
 	hasCurrentRunResult = true;
 	metricDisplayValue = {};
+	metricSmoothedValue = {};
 	renderStatus(optimistic);
 
 	return statusCall('start').then(function(data) {
@@ -626,14 +633,26 @@ function updateSpeedometerTicks(node, data) {
 	progress = Math.max(0, Math.min(100, gaugeProgress(data)));
 	progressPath = svg.querySelector('.yandex-internetometer-progress-path');
 	if (progressPath)
-		animateValue('progress', progress, 650, function(value) {
+		animateValue('progress', progress, 1200, function(value) {
 			progressPath.setAttribute('style', 'stroke-dasharray:%s 100'.format(value === null ? 0 : value.toFixed(2)));
 		});
 }
 
-function updateMetricNode(node, selector, key, value, active) {
+function smoothedMetric(key, target, running) {
+	var previous = metricSmoothedValue[key];
+
+	if (!running || previous === null || previous === undefined || isNaN(previous)) {
+		metricSmoothedValue[key] = target;
+		return target;
+	}
+
+	metricSmoothedValue[key] = previous + (target - previous) * 0.38;
+	return metricSmoothedValue[key];
+}
+
+function updateMetricNode(node, selector, key, value, active, running) {
 	var metric = node.querySelector(selector);
-	var valueNode, target;
+	var valueNode, target, displayTarget;
 
 	if (!metric)
 		return;
@@ -645,9 +664,11 @@ function updateMetricNode(node, selector, key, value, active) {
 			if (valueNode.textContent !== '--')
 				valueNode.textContent = '--';
 			metricDisplayValue[key] = null;
+			metricSmoothedValue[key] = null;
 		}
 		else {
-			animateValue(key, target, 650, function(displayValue) {
+			displayTarget = smoothedMetric(key, target, running);
+			animateValue(key, displayTarget, running ? 1200 : 0, function(displayValue) {
 				valueNode.textContent = metricNumber(displayValue);
 			});
 		}
@@ -679,9 +700,9 @@ function updateStatusInPlace(data) {
 		ipNode.textContent = hasValue(data.public_ip) ? data.public_ip : '--';
 
 	updateSpeedometerTicks(statusBox, data);
-	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-download', 'download', hasValue(data.download_mbps) ? data.download_mbps : null, phase === 'download');
-	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-upload', 'upload', hasValue(data.upload_mbps) ? data.upload_mbps : null, phase === 'upload');
-	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-ping', 'ping', hasValue(data.ping_ms) ? data.ping_ms : null, phase === 'ping' || phase === 'prepare');
+	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-download', 'download', hasValue(data.download_mbps) ? data.download_mbps : null, phase === 'download', !!data.running);
+	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-upload', 'upload', hasValue(data.upload_mbps) ? data.upload_mbps : null, phase === 'upload', !!data.running);
+	updateMetricNode(statusBox, '.yandex-internetometer-speed-metric.is-ping', 'ping', hasValue(data.ping_ms) ? data.ping_ms : null, phase === 'ping' || phase === 'prepare', !!data.running);
 
 	values = detailValues(data);
 	rows = statusBox.querySelectorAll('.yandex-internetometer-detail-row');
