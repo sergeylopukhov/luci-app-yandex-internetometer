@@ -16,6 +16,7 @@ var metricAnimationFrame = {};
 var metricDisplayValue = {};
 var metricSmoothedValue = {};
 var languageStorageKey = 'yandexInternetometerLanguage';
+var themeStorageKey = 'yandexInternetometerTheme';
 var translations = {
 	ru: {
 		'Bytes per upload request. The payload is prepared in /tmp before measurement and is not stored on flash.': 'Байт на один исходящий запрос. Payload готовится в /tmp перед измерением и не сохраняется во flash.',
@@ -61,6 +62,9 @@ var translations = {
 		'Stream count': 'Количество потоков',
 		'Streams': 'Потоки',
 		'Switch application language': 'Сменить язык приложения',
+		'Switch color theme': 'Сменить тему оформления',
+		'Dark theme': 'Тёмная тема',
+		'Light theme': 'Светлая тема',
 		'Unable to execute backend command': 'Не удалось выполнить backend-команду',
 		'Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software.': 'Неофициальный совместимый с Яндекс Интернетометром тест скорости через probe-серверы Яндекса. Это не официальное ПО Яндекса.',
 		'Outgoing': 'Исходящая',
@@ -86,6 +90,7 @@ var translations = {
 	}
 };
 var appLanguage = readStoredLanguage() || 'ru';
+var appTheme = readStoredTheme() || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 
 function readStoredLanguage() {
 	try {
@@ -101,6 +106,24 @@ function readStoredLanguage() {
 function storeLanguage(language) {
 	try {
 		window.localStorage.setItem(languageStorageKey, language);
+	}
+	catch (e) {}
+}
+
+function readStoredTheme() {
+	try {
+		var theme = window.localStorage.getItem(themeStorageKey);
+		if (theme === 'light' || theme === 'dark')
+			return theme;
+	}
+	catch (e) {}
+
+	return null;
+}
+
+function storeTheme(theme) {
+	try {
+		window.localStorage.setItem(themeStorageKey, theme);
 	}
 	catch (e) {}
 }
@@ -833,10 +856,11 @@ return view.extend({
 			statusBox = E('div');
 			actionBox = E('div', { 'class': 'yandex-internetometer-actions' });
 
-			var node = E('div', { 'class': 'yandex-internetometer-page' }, [
+			var node = E('div', { 'class': 'yandex-internetometer-page yandex-internetometer-theme-' + appTheme }, [
 				E('style', {}, [
 					'.yandex-internetometer-page{--yi-bg:#fbfaf8;--yi-panel:#f0efec;--yi-border:rgba(35,35,35,.12);--yi-muted:#6f6f6f;--yi-text:#252528;--yi-red:#ff5138;--yi-red-soft:rgba(255,81,56,.12);--yi-green:#20a464;font-family:"YS Text",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}',
-					'.yandex-internetometer-topbar{display:flex;justify-content:flex-start;margin:0 0 10px}',
+					'.yandex-internetometer-page.yandex-internetometer-theme-dark{--yi-bg:#17191e;--yi-panel:#22262e;--yi-border:rgba(255,255,255,.16);--yi-muted:#aeb5c1;--yi-text:#f5f7fa;--yi-red:#ff725e;--yi-red-soft:rgba(255,114,94,.18);--yi-green:#47c785}',
+					'.yandex-internetometer-topbar{display:flex;justify-content:flex-start;gap:8px;margin:0 0 10px}',
 					'.yandex-internetometer-language{min-height:34px;border:1px solid var(--yi-border);border-radius:8px;background:rgba(255,255,255,.7);color:var(--yi-text);padding:6px 12px;cursor:pointer}',
 					'.yandex-internetometer-actions{display:none}',
 					'.yandex-internetometer-hero{display:grid;grid-template-columns:minmax(0,1fr);justify-items:center;gap:16px;margin:10px 0 18px;padding:10px 10px 18px;background:var(--yi-bg);color:var(--yi-text);overflow:hidden}',
@@ -894,15 +918,22 @@ return view.extend({
 					'.yandex-internetometer-settings>summary{cursor:pointer;padding:14px 18px;border-bottom:1px solid #e5e6e8;background:#f7f7f8;color:#252528;font-size:16px;font-weight:700;line-height:1.3;list-style-position:inside}',
 					'.yandex-internetometer-settings:not([open])>summary{border-bottom:0}',
 					'.yandex-internetometer-settings>*:not(summary){padding:0 18px 4px}',
-					'.yandex-internetometer-settings .cbi-map,.yandex-internetometer-settings .cbi-section,.yandex-internetometer-settings .cbi-section-node{margin:0;padding:0;border:0;background:transparent;color:#252528}',
+					'.yandex-internetometer-settings .cbi-map,.yandex-internetometer-settings .cbi-section,.yandex-internetometer-settings .cbi-section-node{margin:0;padding:0;border:0;background:transparent;color:#252528 !important}',
 					'.yandex-internetometer-settings .cbi-value{display:grid;grid-template-columns:minmax(190px,280px) minmax(0,1fr);gap:7px 24px;align-items:start;float:none;width:auto;min-height:0;margin:0;padding:18px 0;border-bottom:1px solid #e8e8ea;background:transparent;color:#252528}',
 					'.yandex-internetometer-settings .cbi-value:last-child{border-bottom:0}',
-					'.yandex-internetometer-settings .cbi-value-title{float:none;width:auto;min-width:0;margin:0;padding:9px 0 0;color:#252528;font-size:14px;font-weight:700;line-height:1.4;text-align:left}',
-					'.yandex-internetometer-settings .cbi-value-field{float:none;width:auto;min-width:0;margin:0;color:#252528}',
+					'.yandex-internetometer-settings .cbi-value-title{float:none;width:auto;min-width:0;margin:0;padding:9px 0 0;color:#252528 !important;font-size:14px;font-weight:700;line-height:1.4;text-align:left}',
+					'.yandex-internetometer-settings .cbi-value-field{float:none;width:auto;min-width:0;margin:0;color:#252528 !important}',
 					'.yandex-internetometer-settings input:not([type="checkbox"]),.yandex-internetometer-settings select{box-sizing:border-box;width:100%;min-height:42px;margin:0;padding:8px 12px;border:1px solid #b9bcc3;border-radius:8px;background:#fff;color:#202124;font-size:16px;line-height:1.25;box-shadow:none}',
 					'.yandex-internetometer-settings input:not([type="checkbox"]):focus,.yandex-internetometer-settings select:focus{border-color:#ff5138;outline:2px solid rgba(255,81,56,.24);outline-offset:1px}',
 					'.yandex-internetometer-settings input[type="checkbox"]{width:20px;height:20px;margin:10px 0;accent-color:#ff5138;vertical-align:middle}',
 					'.yandex-internetometer-settings .cbi-value-description{grid-column:2;float:none;width:auto;margin:1px 0 0;color:#555b65;font-size:13px;line-height:1.48}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-language{background:#292e38;color:#f5f7fa;border-color:#4b5360}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-settings{background:#20242c;color:#f5f7fa;border-color:#454d5b;box-shadow:0 8px 22px rgba(0,0,0,.32)}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-settings>summary{background:#292e38;border-color:#454d5b;color:#f5f7fa}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-map,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-section,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-section-node,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value-title,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value-field{color:#f5f7fa !important}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value{border-color:#3b4350}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-settings input:not([type="checkbox"]),.yandex-internetometer-theme-dark .yandex-internetometer-settings select{background:#171a20;color:#f5f7fa;border-color:#596272}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value-description{color:#b8c0cc}',
 					'@media (max-width:900px){.yandex-internetometer-speed-metric{width:160px}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:48px}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
 					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}.yandex-internetometer-settings{margin-top:16px;border-radius:10px}.yandex-internetometer-settings>summary{padding:13px 14px}.yandex-internetometer-settings>*:not(summary){padding:0 14px 4px}.yandex-internetometer-settings .cbi-value{grid-template-columns:1fr;gap:7px;padding:16px 0}.yandex-internetometer-settings .cbi-value-title{padding:0}.yandex-internetometer-settings .cbi-value-description{grid-column:1}.yandex-internetometer-update{align-items:flex-start}.yandex-internetometer-update-command code{font-size:11px}}',
 				].join('')),
@@ -916,6 +947,16 @@ return view.extend({
 							window.location.reload();
 						}
 					}, appLanguage === 'ru' ? 'English' : 'Русский')
+					,
+					E('button', {
+						'type': 'button',
+						'class': 'yandex-internetometer-language',
+						'title': T('Switch color theme'),
+						'click': function() {
+							storeTheme(appTheme === 'dark' ? 'light' : 'dark');
+							window.location.reload();
+						}
+					}, appTheme === 'dark' ? T('Light theme') : T('Dark theme'))
 				]),
 				E('h2', {}, T('Yandex Internetometer')),
 				E('p', {}, T('Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software.')),
