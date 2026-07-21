@@ -4,7 +4,8 @@
 		"read": {
 			"uci": [ "yandex-internetometer" ],
 			"file": {
-				"/usr/libexec/yandex-internetometer/status": [ "exec" ]
+				"/usr/libexec/yandex-internetometer/status": [ "exec" ],
+				"/usr/libexec/yandex-internetometer/update-check": [ "exec" ]
 			}
 		},
 		"write": {

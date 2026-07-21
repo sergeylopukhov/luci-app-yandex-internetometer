@@ -1,4 +1,14 @@
-# luci-app-yandex-internetometer 0.0.1
+# luci-app-yandex-internetometer
+
+## v1.0.0
+
+- Тестовый download/upload в `auto` использует проверенный HTTP CDN Яндекса, а probe и публичный IP остаются на HTTPS.
+- Добавлены безопасная проверка URL, HTTPS-fallback, фактический транспорт в JSON/LuCI и принудительный режим HTTPS.
+- Upload использует sparse-payload, дробное монотонное время, отдельные счётчики worker, round-robin CDN и корректное завершение процессов.
+- Добавлены уведомление LuCI о новой версии, `version.json`, универсальный установщик apk/opkg с проверкой подписи или SHA256.
+- Пакет: `1.0.0-r1`; IPK: `luci-app-yandex-internetometer-1.0.0-openwrt-24.10-all.ipk`.
+
+# Архив 0.0.1
 
 Initial public release.
 

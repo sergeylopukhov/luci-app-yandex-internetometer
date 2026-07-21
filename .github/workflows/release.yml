@@ -11,7 +11,8 @@ permissions:
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PKG_VERSION: 0.0.1-r22
+  PROJECT_VERSION: 1.0.0
+  PKG_VERSION: 1.0.0-r1
 
 jobs:
   build:
@@ -21,7 +22,7 @@ jobs:
       - name: Checkout package
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref }}
 
       - name: Install host tools
         run: |
@@ -72,7 +73,7 @@ jobs:
           tar --numeric-owner --owner=0 --group=0 -czf "$WORK/data.tar.gz" -C "$PKGROOT" .
           tar --numeric-owner --owner=0 --group=0 -czf "$WORK/control.tar.gz" -C "$WORK/control" .
           tar --numeric-owner --owner=0 --group=0 -czf \
-            "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-24.10-all.ipk" \
+            "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-24.10-all.ipk" \
             -C "$WORK" ./debian-binary ./data.tar.gz ./control.tar.gz
 
       - name: Download apk-capable OpenWrt SDK
@@ -92,11 +93,8 @@ jobs:
           SDK="$RUNNER_TEMP/sdk"
           PKGROOT="$RUNNER_TEMP/pkgroot"
           test -x "$SDK/staging_dir/host/bin/apk"
-          if [ -n "${APK_PRIVATE_KEY:-}" ]; then
-            printf '%s\n' "$APK_PRIVATE_KEY" > "$SDK/private-key.pem"
-          elif [ ! -f "$SDK/private-key.pem" ]; then
-            openssl ecparam -name prime256v1 -genkey -noout -out "$SDK/private-key.pem"
-          fi
+          test -n "${APK_PRIVATE_KEY:-}" || { echo 'YANDEX_INTERNETOMETER_APK_PRIVATE_KEY is required' >&2; exit 1; }
+          printf '%s\n' "$APK_PRIVATE_KEY" > "$SDK/private-key.pem"
           openssl ec -in "$SDK/private-key.pem" -pubout -out "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub"
           ARCHES="
           aarch64
@@ -161,7 +159,7 @@ jobs:
               --script "post-upgrade:$GITHUB_WORKSPACE/scripts/post-install" \
               --script "post-deinstall:$GITHUB_WORKSPACE/scripts/post-deinstall" \
               --files "$PKGROOT" \
-              --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk"
+              --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-snapshot-$arch.apk"
           done
 
           REPO="$GITHUB_WORKSPACE/docs/packages"
@@ -171,7 +169,7 @@ jobs:
           for arch in $ARCHES; do
             dir="$REPO/$arch/yandex-internetometer"
             mkdir -p "$dir"
-            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-0.0.1-openwrt-snapshot-$arch.apk" "$dir/luci-app-yandex-internetometer-$PKG_VERSION.apk"
+            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-snapshot-$arch.apk" "$dir/luci-app-yandex-internetometer-$PKG_VERSION.apk"
             (
               cd "$dir"
               "$SDK/staging_dir/host/bin/apk" mkndx \
@@ -184,16 +182,10 @@ jobs:
             )
           done
 
-      - name: Commit GitHub Pages APK repository
+      - name: Create checksums
         run: |
-          set -eu
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/keys docs/packages
-          if ! git diff --cached --quiet; then
-            git commit -m "Update generated APK repository"
-            git push origin main
-          fi
+          cd dist
+          sha256sum * > SHA256SUMS
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
@@ -228,3 +220,32 @@ jobs:
               --notes-file RELEASE_NOTES.md \
               --latest
           fi
+
+  publish-pages:
+    name: Publish verified APK repository and metadata
+    needs: release
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Update GitHub Pages files after release
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p docs/packages docs/keys
+          cp dist/yandex-internetometer.rsa.pub docs/keys/yandex-internetometer.rsa.pub
+          find dist -name '*.apk' | while read -r apk; do
+            arch=$(basename "$apk" | sed -n 's/.*snapshot-\(.*\)\.apk/\1/p')
+            dir="docs/packages/$arch/yandex-internetometer"
+            mkdir -p "$dir"
+            cp "$apk" "$dir/luci-app-yandex-internetometer-${PKG_VERSION}.apk"
+          done
+          git add docs/keys docs/packages docs/install.sh docs/version.json
+          git diff --cached --quiet || { git commit -m "Publish v${PROJECT_VERSION} package repository"; git push origin main; }

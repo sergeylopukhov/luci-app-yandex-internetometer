@@ -1,4 +1,10 @@
-# Manual testing
+# Проверка v1.0.0
+
+Автоматически: `sh -n root/usr/bin/yandex-internetometer docs/install.sh`, `node --check htdocs/luci-static/resources/view/status/yandex-internetometer.js`, сравнение двух LuCI-файлов и `git diff --check`.
+
+Smoke-тест: получить probe по HTTPS, выполнить короткие HTTP GET/POST без redirect и проверить HTTPS-fallback с недоступным HTTP URL. На реальном роутере дополнительно нужны три замера: `auto`, `https` и ориентир с Ethernet-компьютера, а также CPU, MemAvailable и отсутствие `curl` после Stop.
+
+# Архив: ручная проверка
 
 1. Build the package with an apk-based OpenWrt SDK/buildroot.
 2. Install it on the router with the universal installer:

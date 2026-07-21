@@ -11,6 +11,7 @@ var statusData = null;
 var localStartedAt = null;
 var hasCurrentRunResult = false;
 var statusLayoutKey = null;
+var updateData = null;
 var metricAnimationFrame = {};
 var metricDisplayValue = {};
 var languageStorageKey = 'yandexInternetometerLanguage';
@@ -66,6 +67,14 @@ var translations = {
 		'Upload speed': 'Исходящая скорость',
 		'Upload stream count': 'Количество исходящих потоков',
 		'Upload streams': 'Исходящие потоки',
+		'Transfer protocol': 'Транспорт теста',
+		'Transfer protocol mode': 'Режим транспорта',
+		'HTTP fallback: router CPU/TLS may limit the result.': 'HTTP недоступен: результат может быть ограничен CPU/TLS роутера.',
+		'Update available': 'Доступно обновление',
+		'Installed version %s': 'Установлена версия %s',
+		'Open release': 'Открыть выпуск',
+		'Check for updates': 'Проверить обновление',
+		'Unable to check updates. Check the connection and try again.': 'Не удалось проверить обновление. Проверьте подключение и попробуйте снова.',
 		'Yandex Internetometer': 'Яндекс Интернетометр',
 		'ms': 'мс'
 	}
@@ -194,6 +203,17 @@ function statusCall(command) {
 			server: null,
 			error: err ? String(err) : T('Unable to execute backend command')
 		};
+	});
+}
+
+function updateCheck() {
+	return fs.exec_direct('/usr/libexec/yandex-internetometer/update-check', [], 'json').then(function(data) {
+		updateData = data || { ok: false };
+		renderStatus(statusData);
+		return updateData;
+	}).catch(function() {
+		updateData = { ok: false, manual: true };
+		renderStatus(statusData);
 	});
 }
 
@@ -382,8 +402,27 @@ function detailValues(data) {
 		emptyValue(data.upload_streams),
 		emptyValue(data.probe_count),
 		emptyValue(data.server),
-		emptyValue(data.timestamp)
+		emptyValue(data.timestamp),
+		emptyValue(data.transfer_protocol),
+		emptyValue(data.version)
 	];
+}
+
+function renderUpdateNotice() {
+	var release;
+	if (!updateData)
+		return null;
+	if (!updateData.ok)
+		return updateData.manual ? E('div', { 'class': 'alert-message warning' }, T('Unable to check updates. Check the connection and try again.')) : null;
+	if (!updateData.update_available)
+		return null;
+	release = updateData.release || {};
+	return E('div', { 'class': 'alert-message notice yandex-internetometer-update' }, [
+		E('strong', {}, '%s %s'.format(T('Update available'), release.version || '')),
+		E('span', {}, T('Installed version %s').format(updateData.installed_version || '')),
+		E('a', { 'class': 'btn cbi-button', 'href': release.release_url || 'https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest', 'target': '_blank', 'rel': 'noopener' }, T('Open release')),
+		E('button', { 'class': 'btn cbi-button', 'click': updateCheck }, T('Check for updates'))
+	]);
 }
 
 function svgNode(name, attrs, children) {
@@ -551,7 +590,9 @@ function renderHero(data) {
 			detailRow(T('Upload streams'), detailValues(data)[3]),
 			detailRow(T('Probe servers'), detailValues(data)[4]),
 			detailRow(T('Server'), detailValues(data)[5]),
-			detailRow(T('Last run'), detailValues(data)[6])
+			detailRow(T('Last run'), detailValues(data)[6]),
+			detailRow(T('Transfer protocol'), detailValues(data)[7]),
+			detailRow(T('Version'), detailValues(data)[8])
 		])
 	]);
 }
@@ -663,10 +704,15 @@ function renderStatus(data) {
 	statusLayoutKey = nextLayoutKey;
 
 	var children = [];
+	var updateNotice = renderUpdateNotice();
 
 	if (statusData.error) {
 		children.push(E('div', { 'class': 'alert-message warning' }, statusData.error));
 	}
+	if (statusData.https_fallback)
+		children.push(E('div', { 'class': 'alert-message warning' }, T('HTTP fallback: router CPU/TLS may limit the result.')));
+	if (updateNotice)
+		children.push(updateNotice);
 
 	children.push(renderHero(statusData));
 
@@ -689,7 +735,8 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			uci.load('yandex-internetometer'),
-			statusCall('status')
+				statusCall('status'),
+				fs.exec_direct('/usr/libexec/yandex-internetometer/update-check', [], 'json').catch(function() { return null; })
 		]);
 	},
 
@@ -697,6 +744,7 @@ return view.extend({
 		var m, s, o;
 
 		statusData = data[1] || {};
+		updateData = data[2] || null;
 
 		m = new form.Map('yandex-internetometer', T('Settings'));
 		s = m.section(form.NamedSection, 'main', 'settings');
@@ -713,6 +761,13 @@ return view.extend({
 		o.value('4', '4');
 		o.value('8', '8');
 		o.value('12', '12');
+		o.default = 'auto';
+		o.rmempty = false;
+
+		o = s.option(form.ListValue, 'transfer_protocol', T('Transfer protocol mode'));
+		o.value('auto', 'auto');
+		o.value('http', 'http');
+		o.value('https', 'https');
 		o.default = 'auto';
 		o.rmempty = false;
 

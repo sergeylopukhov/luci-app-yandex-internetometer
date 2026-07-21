@@ -1,0 +1,10 @@
+#!/bin/ash
+CACHE=/tmp/yandex-internetometer/update.json
+URL=https://sergeylopukhov.github.io/luci-app-yandex-internetometer/version.json
+LOCAL="$(cat /usr/share/yandex-internetometer/version 2>/dev/null || printf 0.0.0)"
+newer() { awk -v a="$1" -v b="$2" 'BEGIN{split(a,x,".");split(b,y,".");for(i=1;i<=3;i++){if(x[i]+0>y[i]+0)exit 0;if(x[i]+0<y[i]+0)exit 1}exit 1}'; }
+fetch() { mkdir -p /tmp/yandex-internetometer; if [ -s "$CACHE" ] && [ $(( $(date +%s) - $(stat -c %Y "$CACHE" 2>/dev/null || stat -f %m "$CACHE" 2>/dev/null || echo 0) )) -lt 21600 ]; then cat "$CACHE"; elif command -v curl >/dev/null 2>&1; then curl -fsSL --connect-timeout 3 --max-time 5 "$URL"; else wget -q -T 5 -O - "$URL"; fi; }
+remote="$(fetch 2>/dev/null)" || { jq -cn --arg version "$LOCAL" '{ok:false,installed_version:$version}'; exit 0; }
+printf '%s\n' "$remote" | jq -e '.version|strings|test("^[0-9]+\\.[0-9]+\\.[0-9]+$")' >/dev/null 2>&1 || { jq -cn --arg version "$LOCAL" '{ok:false,installed_version:$version}'; exit 0; }
+printf '%s\n' "$remote" > "$CACHE"; latest="$(printf '%s\n' "$remote" | jq -r .version)"
+if newer "$latest" "$LOCAL"; then jq -cn --arg installed "$LOCAL" --argjson release "$remote" '{ok:true,installed_version:$installed,update_available:true,release:$release}'; else jq -cn --arg installed "$LOCAL" --argjson release "$remote" '{ok:true,installed_version:$installed,update_available:false,release:$release}'; fi
