@@ -192,11 +192,21 @@ jobs:
           cd dist
           sha256sum * > SHA256SUMS
 
+      - name: Pack signed APK repository for GitHub Pages
+        run: |
+          tar -C "$GITHUB_WORKSPACE/docs" -czf "$RUNNER_TEMP/yandex-internetometer-apk-repository.tar.gz" packages keys
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-packages
           path: dist/*
+
+      - name: Upload signed APK repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-apk-repository
+          path: ${{ runner.temp }}/yandex-internetometer-apk-repository.tar.gz
 
   release:
     name: Publish GitHub release
@@ -240,18 +250,16 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: pages-apk-repository
+          path: ${{ runner.temp }}/pages-apk-repository
       - name: Update GitHub Pages files after release
         run: |
           set -eu
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p docs/packages docs/keys
-          cp dist/yandex-internetometer.rsa.pub docs/keys/yandex-internetometer.rsa.pub
-          find dist -name '*.apk' | while read -r apk; do
-            arch=$(basename "$apk" | sed -n 's/.*snapshot-\(.*\)\.apk/\1/p')
-            dir="docs/packages/$arch/yandex-internetometer"
-            mkdir -p "$dir"
-            cp "$apk" "$dir/luci-app-yandex-internetometer-${PKG_VERSION}.apk"
-          done
+          rm -rf docs/packages docs/keys
+          tar -C docs -xzf "$RUNNER_TEMP/pages-apk-repository/yandex-internetometer-apk-repository.tar.gz"
           git add docs/keys docs/packages docs/install.sh docs/version.json
           git diff --cached --quiet || { git commit -m "Publish v${PROJECT_VERSION} package repository"; git push origin main; }
