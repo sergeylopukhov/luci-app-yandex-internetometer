@@ -74,6 +74,7 @@ var translations = {
 		'Installed version %s': 'Установлена версия %s',
 		'Open release': 'Открыть выпуск',
 		'Check for updates': 'Проверить обновление',
+		'Update command': 'Команда обновления',
 		'Unable to check updates. Check the connection and try again.': 'Не удалось проверить обновление. Проверьте подключение и попробуйте снова.',
 		'Yandex Internetometer': 'Яндекс Интернетометр',
 		'ms': 'мс'
@@ -421,6 +422,7 @@ function renderUpdateNotice() {
 		E('strong', {}, '%s %s'.format(T('Update available'), release.version || '')),
 		E('span', {}, T('Installed version %s').format(updateData.installed_version || '')),
 		E('a', { 'class': 'btn cbi-button', 'href': release.release_url || 'https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest', 'target': '_blank', 'rel': 'noopener' }, T('Open release')),
+		E('div', { 'class': 'yandex-internetometer-update-command' }, [ E('span', {}, T('Update command')), E('code', {}, 'curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh -s -- --yes') ]),
 		E('button', { 'class': 'btn cbi-button', 'click': updateCheck }, T('Check for updates'))
 	]);
 }
