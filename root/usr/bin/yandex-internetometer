@@ -51,7 +51,7 @@ fetch_probes() { curl -fsSL --connect-timeout 5 --max-time 10 -H "Referer: $REFE
 probe_count() { jq '[.latency.probes[]?.url,.download.probes[]?.url,.upload.probes[]?.url]|length' "$PROBES_FILE"; }
 server_name() { jq -r '.latency.probes[0].url // empty' "$PROBES_FILE" | sed -n 's#^https://\([^/]*\).*#\1#p'; }
 latency_urls() { jq -r '.latency.probes[]?.url' "$PROBES_FILE"; }
-safe_transfer_url() { kind="$1"; url="$2"; case "$url" in https://*.cdn.yandex.net/*) ;; *) return 1;; esac; case "$kind:$url" in download:*'/probes/50mb'*|upload:*'/probes/'*'size='*) printf '%s\n' "$url";; *) return 1;; esac; }
+safe_transfer_url() { kind="$1"; url="$2"; case "$url" in https://*.cdn.yandex.net/*) ;; *) return 1;; esac; case "$kind:$url" in download:*'/probes/50mb'*|upload:*'/upload?'*'size='*) printf '%s\n' "$url";; *) return 1;; esac; }
 transfer_urls() { kind="$1"; jq -r ".${kind}.probes[]?.url" "$PROBES_FILE" 2>/dev/null | while IFS= read -r u; do safe_transfer_url "$kind" "$u"; done; }
 http_url() { printf '%s\n' "$1" | sed 's#^https://#http://#'; }
 http_code() { curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 4 --max-redirs 0 "$@" 2>>"$LOG_FILE" || printf 000; }
