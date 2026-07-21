@@ -1,4 +1,4 @@
-# Проверка v1.0.0
+# Проверка v1.0.1
 
 Автоматически: `sh -n root/usr/bin/yandex-internetometer docs/install.sh`, `node --check htdocs/luci-static/resources/view/status/yandex-internetometer.js`, сравнение двух LuCI-файлов и `git diff --check`.
 
