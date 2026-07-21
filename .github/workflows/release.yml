@@ -9,15 +9,15 @@ on:
       release_tag:
         description: Existing immutable tag to publish
         required: true
-        default: v1.0.4
+        default: v1.0.5
 
 permissions:
   contents: write
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PROJECT_VERSION: 1.0.4
-  PKG_VERSION: 1.0.4-r1
+  PROJECT_VERSION: 1.0.5
+  PKG_VERSION: 1.0.5-r1
 
 jobs:
   build:
@@ -261,5 +261,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -rf docs/packages docs/keys
           tar -C docs -xzf "$RUNNER_TEMP/pages-apk-repository/yandex-internetometer-apk-repository.tar.gz"
+          cat > docs/version.json <<EOF
+          {
+            "version": "${PROJECT_VERSION}",
+            "package_version": "${PKG_VERSION}",
+            "tag": "v${PROJECT_VERSION}",
+            "release_url": "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/tag/v${PROJECT_VERSION}",
+            "install_url": "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh",
+            "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
           git add docs/keys docs/packages docs/install.sh docs/version.json
           git diff --cached --quiet || { git commit -m "Publish v${PROJECT_VERSION} package repository"; git push origin main; }

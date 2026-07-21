@@ -19,11 +19,13 @@ var translations = {
 	ru: {
 		'Bytes per upload request. The payload is prepared in /tmp before measurement and is not stored on flash.': 'Байт на один исходящий запрос. Payload готовится в /tmp перед измерением и не сохраняется во flash.',
 		'Checking latency': 'Проверка задержки',
+		'Choose how the test connects to the Yandex CDN. Auto uses HTTP and securely falls back to HTTPS if needed.': 'Как подключаться к CDN Яндекса. «Авто» использует HTTP и при необходимости безопасно переходит на HTTPS.',
 		'Complete': 'Готово',
 		'Current stage: %s': 'Текущий этап: %s',
 		'Debug mode': 'Режим отладки',
 		'Download': 'Скачивание',
 		'Download duration': 'Длительность входящего теста',
+		'Number of parallel download requests. Four streams are a balanced starting point for most routers.': 'Параллельные запросы на скачивание. Четыре потока — сбалансированное начало для большинства роутеров.',
 		'Download speed': 'Входящая скорость',
 		'Elapsed: %s seconds': 'Прошло: %s с',
 		'Enable upload test': 'Включить исходящий тест',
@@ -34,6 +36,7 @@ var translations = {
 		'Last run': 'Последний запуск',
 		'Latency': 'Задержка',
 		'Latency sample count': 'Количество замеров задержки',
+		'More samples make the latency result steadier but take longer.': 'Больше замеров дают более устойчивый результат, но занимают больше времени.',
 		'Measure': 'Измерить',
 		'Mbps': 'Мбит/с',
 		'Measuring download speed': 'Измерение входящей скорости',
@@ -66,6 +69,7 @@ var translations = {
 		'Upload payload size': 'Размер исходящего payload',
 		'Upload speed': 'Исходящая скорость',
 		'Upload stream count': 'Количество исходящих потоков',
+		'Auto adjusts the upload load to the router. Use a fixed value only for comparison tests.': '«Авто» подбирает нагрузку для роутера. Фиксированное значение нужно только для сравнения тестов.',
 		'Upload streams': 'Исходящие потоки',
 		'Transfer protocol': 'Транспорт теста',
 		'Transfer protocol mode': 'Режим транспорта',
@@ -755,6 +759,7 @@ return view.extend({
 		o = s.option(form.Value, 'streams', T('Stream count'));
 		o.datatype = 'range(1, 8)';
 		o.rmempty = false;
+		o.description = T('Number of parallel download requests. Four streams are a balanced starting point for most routers.');
 
 		o = s.option(form.ListValue, 'upload_streams', T('Upload stream count'));
 		o.value('auto', 'auto');
@@ -765,6 +770,7 @@ return view.extend({
 		o.value('12', '12');
 		o.default = 'auto';
 		o.rmempty = false;
+		o.description = T('Auto adjusts the upload load to the router. Use a fixed value only for comparison tests.');
 
 		o = s.option(form.ListValue, 'transfer_protocol', T('Transfer protocol mode'));
 		o.value('auto', 'auto');
@@ -772,6 +778,7 @@ return view.extend({
 		o.value('https', 'https');
 		o.default = 'auto';
 		o.rmempty = false;
+		o.description = T('Choose how the test connects to the Yandex CDN. Auto uses HTTP and securely falls back to HTTPS if needed.');
 
 		o = s.option(form.Value, 'download_time', T('Download duration'));
 		o.datatype = 'range(1, 60)';
@@ -786,6 +793,7 @@ return view.extend({
 		o = s.option(form.Value, 'latency_samples', T('Latency sample count'));
 		o.datatype = 'range(10, 50)';
 		o.rmempty = false;
+		o.description = T('More samples make the latency result steadier but take longer.');
 
 		o = s.option(form.Value, 'upload_size', T('Upload payload size'));
 		o.datatype = 'range(1024, 200000000)';
@@ -856,11 +864,26 @@ return view.extend({
 					'.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:0}',
 					'.yandex-internetometer-detail-row span{font-size:12px;color:var(--yi-muted);white-space:nowrap}',
 					'.yandex-internetometer-detail-row strong{font-size:13px;color:var(--yi-text);font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}',
-					'.yandex-internetometer-settings{margin-top:16px;border:1px solid var(--yi-border);border-radius:8px;background:rgba(255,255,255,.45);overflow:hidden}',
-					'.yandex-internetometer-settings>summary{cursor:pointer;padding:12px 14px;font-weight:600;color:var(--yi-text)}',
-					'.yandex-internetometer-settings>*:not(summary){padding:0 14px 14px}',
+					'.yandex-internetometer-update{display:flex;flex-wrap:wrap;align-items:center;gap:9px 12px;margin:0 0 14px;padding:12px 14px;border:1px solid #f1b4a8;border-radius:10px;background:#fff4f0;color:#38251f;font-size:14px;line-height:1.4}',
+					'.yandex-internetometer-update strong{color:#9d2e1e}',
+					'.yandex-internetometer-update a{color:#9d2e1e;font-weight:700}',
+					'.yandex-internetometer-update-command{flex:1 0 100%;display:grid;gap:5px;margin-top:2px;color:#514841;font-size:12px}',
+					'.yandex-internetometer-update-command code{display:block;max-width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e3cfc9;border-radius:7px;background:#fff;color:#252528;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:nowrap}',
+					'.yandex-internetometer-settings{margin-top:20px;border:1px solid #d8d9dc;border-radius:12px;background:#fff;color:#252528;box-shadow:0 6px 18px rgba(20,22,28,.08);overflow:hidden}',
+					'.yandex-internetometer-settings>summary{cursor:pointer;padding:14px 18px;border-bottom:1px solid #e5e6e8;background:#f7f7f8;color:#252528;font-size:16px;font-weight:700;line-height:1.3;list-style-position:inside}',
+					'.yandex-internetometer-settings:not([open])>summary{border-bottom:0}',
+					'.yandex-internetometer-settings>*:not(summary){padding:0 18px 4px}',
+					'.yandex-internetometer-settings .cbi-map,.yandex-internetometer-settings .cbi-section,.yandex-internetometer-settings .cbi-section-node{margin:0;padding:0;border:0;background:transparent;color:#252528}',
+					'.yandex-internetometer-settings .cbi-value{display:grid;grid-template-columns:minmax(190px,280px) minmax(0,1fr);gap:7px 24px;align-items:start;float:none;width:auto;min-height:0;margin:0;padding:18px 0;border-bottom:1px solid #e8e8ea;background:transparent;color:#252528}',
+					'.yandex-internetometer-settings .cbi-value:last-child{border-bottom:0}',
+					'.yandex-internetometer-settings .cbi-value-title{float:none;width:auto;min-width:0;margin:0;padding:9px 0 0;color:#252528;font-size:14px;font-weight:700;line-height:1.4;text-align:left}',
+					'.yandex-internetometer-settings .cbi-value-field{float:none;width:auto;min-width:0;margin:0;color:#252528}',
+					'.yandex-internetometer-settings input:not([type="checkbox"]),.yandex-internetometer-settings select{box-sizing:border-box;width:100%;min-height:42px;margin:0;padding:8px 12px;border:1px solid #b9bcc3;border-radius:8px;background:#fff;color:#202124;font-size:16px;line-height:1.25;box-shadow:none}',
+					'.yandex-internetometer-settings input:not([type="checkbox"]):focus,.yandex-internetometer-settings select:focus{border-color:#ff5138;outline:2px solid rgba(255,81,56,.24);outline-offset:1px}',
+					'.yandex-internetometer-settings input[type="checkbox"]{width:20px;height:20px;margin:10px 0;accent-color:#ff5138;vertical-align:middle}',
+					'.yandex-internetometer-settings .cbi-value-description{grid-column:2;float:none;width:auto;margin:1px 0 0;color:#555b65;font-size:13px;line-height:1.48}',
 					'@media (max-width:900px){.yandex-internetometer-speed-metric{width:160px}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:48px}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
-					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}}',
+					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}.yandex-internetometer-settings{margin-top:16px;border-radius:10px}.yandex-internetometer-settings>summary{padding:13px 14px}.yandex-internetometer-settings>*:not(summary){padding:0 14px 4px}.yandex-internetometer-settings .cbi-value{grid-template-columns:1fr;gap:7px;padding:16px 0}.yandex-internetometer-settings .cbi-value-title{padding:0}.yandex-internetometer-settings .cbi-value-description{grid-column:1}.yandex-internetometer-update{align-items:flex-start}.yandex-internetometer-update-command code{font-size:11px}}',
 				].join('')),
 				E('div', { 'class': 'yandex-internetometer-topbar' }, [
 					E('button', {
