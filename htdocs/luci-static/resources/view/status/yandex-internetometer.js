@@ -920,6 +920,7 @@ return view.extend({
 					'.yandex-internetometer-settings:not([open])>summary{border-bottom:0}',
 					'.yandex-internetometer-settings>*:not(summary){padding:0 18px 4px}',
 					'.yandex-internetometer-settings .cbi-map,.yandex-internetometer-settings .cbi-section,.yandex-internetometer-settings .cbi-section-node{margin:0;padding:0;border:0;background:transparent;color:#252528 !important}',
+					'.yandex-internetometer-settings>.cbi-map{padding:0 18px 4px}',
 					'.yandex-internetometer-settings .cbi-value{display:grid;grid-template-columns:minmax(190px,280px) minmax(0,1fr);gap:7px 24px;align-items:start;float:none;width:auto;min-height:0;margin:0;padding:18px 0;border-bottom:1px solid #e8e8ea;background:transparent;color:#252528}',
 					'.yandex-internetometer-settings .cbi-value:last-child{border-bottom:0}',
 					'.yandex-internetometer-settings .cbi-value-title{float:none;width:auto;min-width:0;margin:0;padding:9px 0 0;color:#252528 !important;font-size:14px;font-weight:700;line-height:1.4;text-align:left}',
