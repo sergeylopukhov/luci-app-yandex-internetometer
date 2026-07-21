@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing immutable tag to publish
+        required: true
+        default: v1.0.0
 
 permissions:
   contents: write
@@ -22,7 +27,7 @@ jobs:
       - name: Checkout package
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Install host tools
         run: |
@@ -79,7 +84,7 @@ jobs:
       - name: Download apk-capable OpenWrt SDK
         run: |
           set -eu
-          SDK_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          SDK_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
           mkdir -p "$RUNNER_TEMP/sdk"
           curl -fL --retry 5 --retry-delay 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 \
             -o "$RUNNER_TEMP/sdk.tar.zst" "$SDK_URL"
@@ -197,7 +202,7 @@ jobs:
     name: Publish GitHub release
     needs: build
     runs-on: ubuntu-24.04
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -212,11 +217,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          TAG="${{ inputs.release_tag || github.ref_name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
           else
-          gh release create "$GITHUB_REF_NAME" dist/* \
-              --title "luci-app-yandex-internetometer $GITHUB_REF_NAME" \
+          gh release create "$TAG" dist/* \
+              --title "luci-app-yandex-internetometer $TAG" \
               --notes-file RELEASE_NOTES.md \
               --latest
           fi
@@ -225,7 +231,7 @@ jobs:
     name: Publish verified APK repository and metadata
     needs: release
     runs-on: ubuntu-24.04
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
         with:
