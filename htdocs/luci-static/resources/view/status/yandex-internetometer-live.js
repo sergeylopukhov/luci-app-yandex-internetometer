@@ -690,8 +690,8 @@ function updateMetricNode(node, selector, key, value, active, running) {
 			metricSmoothedValue[key] = null;
 		}
 		else {
-			displayTarget = smoothedMetric(key, target, running);
-			animateValue(key, displayTarget, running ? 1200 : 0, function(displayValue) {
+			displayTarget = smoothedMetric(key, target, running && active);
+			animateValue(key, displayTarget, running && active ? 1200 : 0, function(displayValue) {
 				valueNode.textContent = metricNumber(displayValue);
 			});
 		}
