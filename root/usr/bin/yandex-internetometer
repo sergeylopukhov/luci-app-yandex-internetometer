@@ -36,10 +36,14 @@ write_progress() { PROGRESS_PHASE="$1"; json_result true "$2" "$3" "$4" "$5" "$6
 load_config() {
 	command -v uci >/dev/null 2>&1 || return 0
 	for item in streams upload_streams download_time upload_time upload_size upload_enabled latency_samples transfer_protocol debug; do
-		value="$(uci -q get yandex-internetometer.main.$item 2>/dev/null)"; [ -n "$value" ] && eval "$(printf '%s' "$item" | tr a-z A-Z)=\$value"
+		value="$(uci -q get yandex-internetometer.main.$item 2>/dev/null)"
+		[ -n "$value" ] || continue
+		case "$item" in
+			streams) STREAMS="$value";; upload_streams) UPLOAD_STREAMS="$value";; download_time) DOWNLOAD_TIME="$value";; upload_time) UPLOAD_TIME="$value";; upload_size) UPLOAD_SIZE="$value";; upload_enabled) UPLOAD_ENABLED="$value";; latency_samples) LATENCY_SAMPLES="$value";; transfer_protocol) TRANSFER_PROTOCOL="$value";; debug) DEBUG="$value";;
+		esac
 	done
 }
-parse_run_args() { while [ "$#" -gt 0 ]; do case "$1" in --json) JSON_MODE=1; shift;; --debug) DEBUG=1; shift;; --streams|--upload-streams|--transfer-protocol|--download-time|--upload-time|--upload-size|--upload-enabled|--latency-samples) [ -n "$2" ] || fail "$1 requires a value"; key="$(printf '%s' "$1" | sed 's/^--//;s/-/_/g' | tr a-z A-Z)"; eval "$key=\$2"; shift 2;; *) fail "Unknown option: $1";; esac; done; }
+parse_run_args() { while [ "$#" -gt 0 ]; do case "$1" in --json) JSON_MODE=1; shift;; --debug) DEBUG=1; shift;; --streams) [ -n "$2" ] || fail "$1 requires a value"; STREAMS="$2"; shift 2;; --upload-streams) [ -n "$2" ] || fail "$1 requires a value"; UPLOAD_STREAMS="$2"; shift 2;; --transfer-protocol) [ -n "$2" ] || fail "$1 requires a value"; TRANSFER_PROTOCOL="$2"; shift 2;; --download-time) [ -n "$2" ] || fail "$1 requires a value"; DOWNLOAD_TIME="$2"; shift 2;; --upload-time) [ -n "$2" ] || fail "$1 requires a value"; UPLOAD_TIME="$2"; shift 2;; --upload-size) [ -n "$2" ] || fail "$1 requires a value"; UPLOAD_SIZE="$2"; shift 2;; --upload-enabled) [ -n "$2" ] || fail "$1 requires a value"; UPLOAD_ENABLED="$2"; shift 2;; --latency-samples) [ -n "$2" ] || fail "$1 requires a value"; LATENCY_SAMPLES="$2"; shift 2;; *) fail "Unknown option: $1";; esac; done; }
 validate_settings() { validate_uint_range "$STREAMS" 1 8 streams; case "$UPLOAD_STREAMS" in auto) ;; *) validate_uint_range "$UPLOAD_STREAMS" 1 12 upload_streams;; esac; validate_uint_range "$DOWNLOAD_TIME" 1 60 download_time; validate_uint_range "$UPLOAD_TIME" 1 60 upload_time; validate_uint_range "$UPLOAD_SIZE" 1024 200000000 upload_size; validate_uint_range "$LATENCY_SAMPLES" 1 50 latency_samples; case "$UPLOAD_ENABLED" in 0|1);; *) fail 'upload_enabled must be 0 or 1';; esac; valid_protocol "$TRANSFER_PROTOCOL" || fail 'transfer_protocol must be auto, http or https'; }
 running_pid() { [ -s "$PID_FILE" ] && pid="$(cat "$PID_FILE")" && is_uint "$pid" && kill -0 "$pid" 2>/dev/null; }
 
