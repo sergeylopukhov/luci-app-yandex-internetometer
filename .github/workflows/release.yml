@@ -257,6 +257,7 @@ jobs:
       - name: Update GitHub Pages files after release
         run: |
           set -eu
+          TAG="${{ inputs.release_tag || github.ref_name }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -rf docs/packages docs/keys
@@ -265,11 +266,18 @@ jobs:
           {
             "version": "${PROJECT_VERSION}",
             "package_version": "${PKG_VERSION}",
-            "tag": "v${PROJECT_VERSION}",
-            "release_url": "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/tag/v${PROJECT_VERSION}",
+            "tag": "${TAG}",
+            "release_url": "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/tag/${TAG}",
             "install_url": "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh",
             "published_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
           git add docs/keys docs/packages docs/install.sh docs/version.json
-          git diff --cached --quiet || { git commit -m "Publish v${PROJECT_VERSION} package repository"; git push origin main; }
+          git diff --cached --quiet || {
+            git commit -m "Publish ${TAG} package repository"
+            for attempt in 1 2 3; do
+              git pull --rebase origin main && git push origin main && exit 0
+              sleep "$attempt"
+            done
+            exit 1
+          }
