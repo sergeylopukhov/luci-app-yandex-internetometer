@@ -4,11 +4,12 @@
 
 ![Интерфейс Интернетометра](docs/screenshot.png)
 <p align="center">
-[![Версия](https://img.shields.io/github/v/release/sergeylopukhov/luci-app-yandex-internetometer?label=version)](https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest)
-[![OpenWrt](https://img.shields.io/badge/OpenWrt-24.10%2B-blue)](https://openwrt.org/)
-[![apk%20%2F%20opkg](https://img.shields.io/badge/packages-apk%20%2F%20opkg-green)](docs/install.sh)
-[![Лицензия](https://img.shields.io/github/license/sergeylopukhov/luci-app-yandex-internetometer)](LICENSE)
+  <a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest"><img src="https://img.shields.io/github/v/release/sergeylopukhov/luci-app-yandex-internetometer?label=version" alt="Версия"></a>
+  <a href="https://openwrt.org/"><img src="https://img.shields.io/badge/OpenWrt-24.10%2B-blue" alt="OpenWrt"></a>
+  <a href="docs/install.sh"><img src="https://img.shields.io/badge/packages-apk%20%2F%20opkg-green" alt="apk / opkg"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/sergeylopukhov/luci-app-yandex-internetometer" alt="Лицензия"></a>
 </p>
+
 ## 🚀 Установка
 
 ```sh
