@@ -106,15 +106,15 @@
 <body>
 	<main>
 		<h1>luci-app-yandex-internetometer</h1>
-		<p class="lead">LuCI-приложение и лёгкий CLI-backend для замера скорости интернета на OpenWrt через probe-серверы Яндекс Интернетометра.</p>
+		<p class="lead">LuCI-приложение и компактная консольная часть для замера скорости интернета на OpenWrt через probe-серверы Яндекс Интернетометра.</p>
 
 		<div class="notice">
-			Это неофициальная совместимая реализация. Это не ПО Яндекса и не официальный SDK. Установка проверялась только на OpenWrt с <code>apk</code>.
+			Неофициальная совместимая реализация. Это не ПО Яндекса и не официальный SDK. Установщик поддерживает OpenWrt с <code>apk</code> и <code>opkg</code>.
 		</div>
 
 		<div class="actions">
 			<a class="primary" href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer">Открыть репозиторий</a>
-			<a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/tag/v1.0.1">Релиз</a>
+			<a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest">Последний релиз</a>
 		</div>
 
 		<h2>Установка и обновление</h2>
@@ -125,7 +125,7 @@
 		<pre><code>wget -O - https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh</code></pre>
 
 		<h2>Что это</h2>
-		<p>Пакет добавляет в OpenWrt страницу <code>Status -> Internetometer</code>. В русской локали пункт меню называется «Интернетометр». Во время теста интерфейс показывает текущий ping, входящую и исходящую скорость. По умолчанию используется 8 потоков.</p>
+		<p>Пакет добавляет в OpenWrt страницу <code>Статус → Интернетометр</code>. Во время теста интерфейс показывает задержку, входящую и исходящую скорость. По умолчанию используются шесть потоков в каждом направлении.</p>
 		<p>Русский язык включён в приложении по умолчанию. Кнопка <code>English</code> меняет только язык этого приложения, не глобальный язык LuCI.</p>
 
 		<h2>Что не требуется</h2>
