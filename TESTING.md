@@ -34,7 +34,7 @@ apk add luci-app-yandex-internetometer
 yandex-internetometer run --json
 ```
 
-Confirm that a fresh config uses `streams: 8` unless the user changed `/etc/config/yandex-internetometer`.
+Confirm that a fresh config uses: `streams: 6`, `upload_streams: 6`, `transfer_protocol: http`, `download_time: 15`, `upload_time: 25`, `latency_samples: 60`, `upload_size: 8000000`, `upload_enabled: 1`, `debug: 0`.
 
 Confirm there is no jq regex error such as:
 

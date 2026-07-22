@@ -5,18 +5,28 @@ rm -f /tmp/luci-indexcache.* 2>/dev/null || true
 if command -v uci >/dev/null 2>&1; then
 	streams="$(uci -q get yandex-internetometer.main.streams 2>/dev/null || true)"
 	if [ -z "$streams" ]; then
-		uci -q set yandex-internetometer.main.streams='4' 2>/dev/null || true
+		uci -q set yandex-internetometer.main.streams='6' 2>/dev/null || true
 	fi
 	protocol="$(uci -q get yandex-internetometer.main.transfer_protocol 2>/dev/null || true)"
-	[ -n "$protocol" ] || uci -q set yandex-internetometer.main.transfer_protocol='auto' 2>/dev/null || true
+	[ -n "$protocol" ] || uci -q set yandex-internetometer.main.transfer_protocol='http' 2>/dev/null || true
 	upload_streams="$(uci -q get yandex-internetometer.main.upload_streams 2>/dev/null || true)"
 	if [ -z "$upload_streams" ]; then
-		uci -q set yandex-internetometer.main.upload_streams='auto' 2>/dev/null || true
+		uci -q set yandex-internetometer.main.upload_streams='6' 2>/dev/null || true
 	fi
+	download_time="$(uci -q get yandex-internetometer.main.download_time 2>/dev/null || true)"
+	[ -n "$download_time" ] || uci -q set yandex-internetometer.main.download_time='15' 2>/dev/null || true
+	upload_time="$(uci -q get yandex-internetometer.main.upload_time 2>/dev/null || true)"
+	[ -n "$upload_time" ] || uci -q set yandex-internetometer.main.upload_time='25' 2>/dev/null || true
+	latency_samples="$(uci -q get yandex-internetometer.main.latency_samples 2>/dev/null || true)"
+	[ -n "$latency_samples" ] || uci -q set yandex-internetometer.main.latency_samples='60' 2>/dev/null || true
 	upload_size="$(uci -q get yandex-internetometer.main.upload_size 2>/dev/null || true)"
-	if [ -z "$upload_size" ] || [ "$upload_size" = "12000000" ] || [ "$upload_size" = "50000000" ]; then
-		uci -q set yandex-internetometer.main.upload_size='30720000' 2>/dev/null || true
+	if [ -z "$upload_size" ]; then
+		uci -q set yandex-internetometer.main.upload_size='8000000' 2>/dev/null || true
 	fi
+	upload_enabled="$(uci -q get yandex-internetometer.main.upload_enabled 2>/dev/null || true)"
+	[ -n "$upload_enabled" ] || uci -q set yandex-internetometer.main.upload_enabled='1' 2>/dev/null || true
+	debug="$(uci -q get yandex-internetometer.main.debug 2>/dev/null || true)"
+	[ -n "$debug" ] || uci -q set yandex-internetometer.main.debug='0' 2>/dev/null || true
 	uci -q commit yandex-internetometer 2>/dev/null || true
 fi
 

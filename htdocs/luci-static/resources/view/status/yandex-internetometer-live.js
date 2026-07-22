@@ -27,7 +27,7 @@ var translations = {
 		'Debug mode': 'Режим отладки',
 		'Download': 'Скачивание',
 		'Download duration': 'Длительность входящего теста',
-		'Number of parallel download requests. Four streams are a balanced starting point for most routers.': 'Параллельные запросы на скачивание. Четыре потока — сбалансированное начало для большинства роутеров.',
+		'Number of parallel download requests. Six streams are the default for a fuller channel load.': 'Параллельные запросы на скачивание. Шесть потоков используются по умолчанию для более полной загрузки канала.',
 		'Download speed': 'Входящая скорость',
 		'Elapsed: %s seconds': 'Прошло: %s с',
 		'Enable upload test': 'Включить исходящий тест',
@@ -805,16 +805,18 @@ return view.extend({
 		o = s.option(form.Value, 'streams', T('Stream count'));
 		o.datatype = 'range(1, 8)';
 		o.rmempty = false;
-		o.description = T('Number of parallel download requests. Four streams are a balanced starting point for most routers.');
+		o.default = '6';
+		o.description = T('Number of parallel download requests. Six streams are the default for a fuller channel load.');
 
 		o = s.option(form.ListValue, 'upload_streams', T('Upload stream count'));
 		o.value('auto', 'auto');
 		o.value('1', '1');
 		o.value('2', '2');
 		o.value('4', '4');
+		o.value('6', '6');
 		o.value('8', '8');
 		o.value('12', '12');
-		o.default = 'auto';
+		o.default = '6';
 		o.rmempty = false;
 		o.description = T('Auto adjusts the upload load to the router. Use a fixed value only for comparison tests.');
 
@@ -822,27 +824,31 @@ return view.extend({
 		o.value('auto', 'auto');
 		o.value('http', 'http');
 		o.value('https', 'https');
-		o.default = 'auto';
+		o.default = 'http';
 		o.rmempty = false;
 		o.description = T('Choose how the test connects to the Yandex CDN. Auto uses HTTP and securely falls back to HTTPS if needed.');
 
 		o = s.option(form.Value, 'download_time', T('Download duration'));
 		o.datatype = 'range(1, 60)';
+		o.default = '15';
 		o.rmempty = false;
 		o.description = T('Seconds.');
 
 		o = s.option(form.Value, 'upload_time', T('Upload duration'));
 		o.datatype = 'range(1, 60)';
+		o.default = '25';
 		o.rmempty = false;
 		o.description = T('Seconds.');
 
 		o = s.option(form.Value, 'latency_samples', T('Latency sample count'));
-		o.datatype = 'range(10, 50)';
+		o.datatype = 'range(25, 120)';
+		o.default = '60';
 		o.rmempty = false;
 		o.description = T('More samples make the latency result steadier but take longer.');
 
 		o = s.option(form.Value, 'upload_size', T('Upload payload size'));
 		o.datatype = 'range(1024, 200000000)';
+		o.default = '8000000';
 		o.rmempty = false;
 		o.description = T('Bytes per upload request. The payload is prepared in /tmp before measurement and is not stored on flash.');
 
