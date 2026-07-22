@@ -2,7 +2,7 @@
 
 Неофициальный LuCI-интерфейс для router-side замера скорости через CDN Яндекса. Проект не связан с Яндексом.
 
-![Интерфейс Интернетометра](docs/screenshot.png)
+![Интерфейс Интернетометра](docs/screenshot.png?v=1.0.14)
 <p align="center">
   <a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest"><img src="https://img.shields.io/github/v/release/sergeylopukhov/luci-app-yandex-internetometer?label=version" alt="Версия"></a>
   <a href="https://openwrt.org/"><img src="https://img.shields.io/badge/OpenWrt-24.10%2B-blue" alt="OpenWrt"></a>
