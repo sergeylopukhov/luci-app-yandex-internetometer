@@ -39,4 +39,4 @@ wget -qO- https://sergeylopukhov.github.io/luci-app-yandex-internetometer/instal
 
 Проверьте DNS, время роутера и наличие `curl`, `jq`. На слабых роутерах router-side результат зависит от CPU, памяти и числа потоков. Для legacy `opkg` пакет рассчитан на OpenWrt 24.10; APK-ветка покрыта полнее.
 
-Технические сценарии, JSON, CLI и сборка: [TESTING.md](TESTING.md). История версии: [RELEASE_NOTES.md](RELEASE_NOTES.md).
+История версий: [RELEASE_NOTES.md](RELEASE_NOTES.md).
