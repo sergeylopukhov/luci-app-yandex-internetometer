@@ -258,8 +258,8 @@ jobs:
         run: |
           set -eu
           TAG="${{ inputs.release_tag || github.ref_name }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "Sergey Lopukhov"
+          git config user.email "sergey.lopukhov@gmail.com"
           rm -rf docs/packages docs/keys
           tar -C docs -xzf "$RUNNER_TEMP/pages-apk-repository/yandex-internetometer-apk-repository.tar.gz"
           cat > docs/version.json <<EOF
