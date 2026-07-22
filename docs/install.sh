@@ -15,6 +15,19 @@ get "$VERSION_URL" "$TMP/version.json"
 VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$TMP/version.json" | head -1)"; PACKAGE_VERSION="$(sed -n 's/.*"package_version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*-r[0-9][0-9]*\)".*/\1/p' "$TMP/version.json" | head -1)"; TAG="$(sed -n 's/.*"tag"[[:space:]]*:[[:space:]]*"\(v[0-9][0-9.]*\(-release\)\{0,1\}\)".*/\1/p' "$TMP/version.json" | head -1)"
 case "$VERSION:$PACKAGE_VERSION:$TAG" in [0-9]*.[0-9]*.[0-9]*:[0-9]*.[0-9]*.[0-9]*-r[0-9]*:v[0-9]*.[0-9]*.[0-9]*|[0-9]*.[0-9]*.[0-9]*:[0-9]*.[0-9]*.[0-9]*-r[0-9]*:v[0-9]*.[0-9]*.[0-9]*-release) ;; *) die 'некорректный version.json';; esac
 installed_version() { if command -v apk >/dev/null 2>&1; then apk info -e "$PKG" >/dev/null 2>&1 || return 0; apk info "$PKG" 2>/dev/null | sed -n "1s/^$PKG-\\([^[:space:]]*\\).*/\\1/p"; elif command -v opkg >/dev/null 2>&1; then opkg status "$PKG" 2>/dev/null | sed -n 's/^Version: \([0-9][^ ]*\).*/\1/p' | head -1; fi; }
+refresh_luci() {
+	view_dir=/www/luci-static/resources/view/status
+	view_name=yandex-internetometer-live
+	menu=/usr/share/luci/menu.d/luci-app-yandex-internetometer.json
+	if [ -r "$view_dir/$view_name.js" ] && [ -f "$menu" ]; then
+		rm -f "$view_dir/$view_name-"*.js 2>/dev/null || true
+		cp "$view_dir/$view_name.js" "$view_dir/$view_name-$PACKAGE_VERSION.js"
+		sed -i "s#\"path\": \"status/$view_name\"#\"path\": \"status/$view_name-$PACKAGE_VERSION\"#" "$menu"
+	fi
+	rm -f /tmp/luci-indexcache.* /tmp/luci-modulecache.* 2>/dev/null || true
+	[ ! -x /etc/init.d/rpcd ] || /etc/init.d/rpcd reload >/dev/null 2>&1 || true
+	[ ! -x /etc/init.d/uhttpd ] || /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+}
 OLD="$(installed_version || true)"
 if [ -n "$OLD" ] && [ "$OLD" = "$PACKAGE_VERSION" ] && [ "$FORCE" = 0 ]; then say "Уже установлена версия $OLD." "Version $OLD is already installed."; exit 0; fi
 [ -z "$OLD" ] || [ "$FORCE" = 1 ] || awk -v a="$VERSION" -v b="${OLD%-r*}" 'BEGIN{split(a,x,".");split(b,y,".");for(i=1;i<=3;i++){if(x[i]>y[i])exit 0;if(x[i]<y[i])exit 1}exit 0}' || die "отказ от downgrade $OLD → $VERSION; используйте --force"
@@ -24,4 +37,4 @@ if command -v apk >/dev/null 2>&1; then
 elif command -v opkg >/dev/null 2>&1; then
  say 'Найден opkg.' 'Found opkg.'; IPK="$PKG-$VERSION-openwrt-24.10-all.ipk"; RELEASE="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/$TAG"; get "$RELEASE/SHA256SUMS" "$TMP/SHA256SUMS"; get "$RELEASE/$IPK" "$TMP/$IPK"; expected="$(awk -v f="$IPK" '$2==f || $2=="*"f{print $1}' "$TMP/SHA256SUMS" | head -1)"; actual="$(sha256sum "$TMP/$IPK" 2>/dev/null | awk '{print $1}')"; [ -n "$expected" ] && [ "$expected" = "$actual" ] || die 'не совпала SHA256-сумма IPK'; opkg install "$TMP/$IPK"
 else die 'не найден apk или opkg'; fi
-rm -f /tmp/luci-indexcache.* 2>/dev/null || true; [ ! -x /etc/init.d/rpcd ] || /etc/init.d/rpcd reload >/dev/null 2>&1 || true; [ -x /usr/bin/yandex-internetometer ] || die 'backend не установлен'; /usr/bin/yandex-internetometer status | grep -q '"ok"' || die 'backend status не вернул JSON'; ACTUAL="$(installed_version || true)"; [ "$ACTUAL" = "$PACKAGE_VERSION" ] || die "установлена версия ${ACTUAL:-неизвестна}, ожидалась $PACKAGE_VERSION; повторите через несколько минут"; say "Установлена версия $VERSION. LuCI → Статус → Интернетометр." "Installed version $VERSION. LuCI → Status → Internetometer."
+refresh_luci; [ -x /usr/bin/yandex-internetometer ] || die 'backend не установлен'; /usr/bin/yandex-internetometer status | grep -q '"ok"' || die 'backend status не вернул JSON'; ACTUAL="$(installed_version || true)"; [ "$ACTUAL" = "$PACKAGE_VERSION" ] || die "установлена версия ${ACTUAL:-неизвестна}, ожидалась $PACKAGE_VERSION; повторите через несколько минут"; say "Установлена версия $VERSION. LuCI → Статус → Интернетометр." "Installed version $VERSION. LuCI → Status → Internetometer."
