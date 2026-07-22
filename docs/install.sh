@@ -18,11 +18,12 @@ installed_version() { if command -v apk >/dev/null 2>&1; then apk info -e "$PKG"
 refresh_luci() {
 	view_dir=/www/luci-static/resources/view/status
 	view_name=yandex-internetometer-live
+	view_version="$(printf '%s' "$PACKAGE_VERSION" | tr '.' '_')"
 	menu=/usr/share/luci/menu.d/luci-app-yandex-internetometer.json
 	if [ -r "$view_dir/$view_name.js" ] && [ -f "$menu" ]; then
 		rm -f "$view_dir/$view_name-"*.js 2>/dev/null || true
-		cp "$view_dir/$view_name.js" "$view_dir/$view_name-$PACKAGE_VERSION.js"
-		sed -i "s#\"path\": \"status/$view_name\"#\"path\": \"status/$view_name-$PACKAGE_VERSION\"#" "$menu"
+		cp "$view_dir/$view_name.js" "$view_dir/$view_name-$view_version.js"
+		sed -i "s#\"path\": \"status/$view_name[^\"]*\"#\"path\": \"status/$view_name-$view_version\"#" "$menu"
 	fi
 	rm -f /tmp/luci-indexcache.* /tmp/luci-modulecache.* 2>/dev/null || true
 	[ ! -x /etc/init.d/rpcd ] || /etc/init.d/rpcd reload >/dev/null 2>&1 || true
