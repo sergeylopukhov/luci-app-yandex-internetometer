@@ -798,7 +798,7 @@ return view.extend({
 		statusData = data[1] || {};
 		updateData = data[2] || null;
 
-		m = new form.Map('yandex-internetometer', T('Settings'));
+		m = new form.Map('yandex-internetometer');
 		s = m.section(form.NamedSection, 'main', 'settings');
 		s.anonymous = true;
 
