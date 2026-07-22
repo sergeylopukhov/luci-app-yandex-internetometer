@@ -12,8 +12,8 @@ command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || die 'ну�
 TMP="$(mktemp -d /tmp/yandex-internetometer.XXXXXX)" || die 'не удалось создать временный каталог'; trap 'rm -rf "$TMP"' EXIT INT TERM
 get() { case "$1" in https://sergeylopukhov.github.io/luci-app-yandex-internetometer/*|https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/*) ;; *) die 'недоверенный URL';; esac; command -v curl >/dev/null 2>&1 && curl -fsSL --connect-timeout 8 --max-time 45 -o "$2" "$1" || wget -q -T 45 -O "$2" "$1"; }
 get "$VERSION_URL" "$TMP/version.json"
-VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$TMP/version.json" | head -1)"; TAG="$(sed -n 's/.*"tag"[[:space:]]*:[[:space:]]*"\(v[0-9][0-9.]*\)".*/\1/p' "$TMP/version.json" | head -1)"
-case "$VERSION:$TAG" in [0-9]*.[0-9]*.[0-9]*:v[0-9]*.[0-9]*.[0-9]*) ;; *) die 'некорректный version.json';; esac
+VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([0-9][0-9.]*\)".*/\1/p' "$TMP/version.json" | head -1)"; TAG="$(sed -n 's/.*"tag"[[:space:]]*:[[:space:]]*"\(v[0-9][0-9.]*\(-release\)\{0,1\}\)".*/\1/p' "$TMP/version.json" | head -1)"
+case "$VERSION:$TAG" in [0-9]*.[0-9]*.[0-9]*:v[0-9]*.[0-9]*.[0-9]*|[0-9]*.[0-9]*.[0-9]*:v[0-9]*.[0-9]*.[0-9]*-release) ;; *) die 'некорректный version.json';; esac
 installed_version() { if command -v apk >/dev/null 2>&1; then apk info -e "$PKG" >/dev/null 2>&1 || return 0; apk info "$PKG" 2>/dev/null | sed -n "1s/^$PKG-\\([^[:space:]]*\\).*/\\1/p"; elif command -v opkg >/dev/null 2>&1; then opkg status "$PKG" 2>/dev/null | sed -n 's/^Version: \([0-9][^ ]*\).*/\1/p' | head -1; fi; }
 OLD="$(installed_version || true)"
 if [ -n "$OLD" ] && [ "$OLD" = "$VERSION-r1" ] && [ "$FORCE" = 0 ]; then say "Уже установлена версия $OLD." "Version $OLD is already installed."; exit 0; fi
