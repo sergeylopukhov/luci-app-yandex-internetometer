@@ -8,6 +8,7 @@
 var statusBox;
 var actionBox;
 var historyBox;
+var updateCheckButton;
 var statusData = null;
 var historyData = [];
 var historyPeriodDays = 30;
@@ -20,6 +21,7 @@ var metricDisplayValue = {};
 var metricSmoothedValue = {};
 var languageStorageKey = 'yandexInternetometerLanguage';
 var themeStorageKey = 'yandexInternetometerTheme';
+var updateCommand = 'curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh -s -- --yes';
 var translations = {
 	ru: {
 		'Bytes per upload request. The payload is prepared in /tmp before measurement and is not stored on flash.': 'Байт на один исходящий запрос. Payload готовится в /tmp перед измерением и не сохраняется во flash.',
@@ -27,7 +29,8 @@ var translations = {
 		'Choose how the test connects to the Yandex CDN. Auto uses HTTP and securely falls back to HTTPS if needed.': 'Как подключаться к CDN Яндекса. «Авто» использует HTTP и при необходимости безопасно переходит на HTTPS.',
 		'Complete': 'Готово',
 		'Current stage: %s': 'Текущий этап: %s',
-		'Debug mode': 'Режим отладки',
+		'Diagnostic log': 'Журнал диагностики',
+		'Writes additional troubleshooting messages to /var/run/yandex-internetometer/debug.log. Enable it only while diagnosing a problem; the log is removed after reboot.': 'Записывает дополнительные сведения в /var/run/yandex-internetometer/debug.log. Включайте только для поиска неполадок: после перезагрузки журнал удаляется.',
 		'Download': 'Скачивание',
 		'Download duration': 'Длительность входящего теста',
 		'Number of parallel download requests. Six streams are the default for a fuller channel load.': 'Параллельные запросы на скачивание. Шесть потоков используются по умолчанию для более полной загрузки канала.',
@@ -106,6 +109,10 @@ var translations = {
 		'Installed version %s': 'Установлена версия %s',
 		'Open release': 'Открыть выпуск',
 		'Check for updates': 'Проверить обновление',
+		'Checking for updates': 'Проверяем обновление…',
+		'No updates available': 'Установлена актуальная версия',
+		'Copy command': 'Скопировать команду',
+		'Command copied': 'Команда скопирована',
 		'Update command': 'Команда обновления',
 		'Unable to check updates. Check the connection and try again.': 'Не удалось проверить обновление. Проверьте подключение и попробуйте снова.',
 		'Yandex Internetometer': 'Яндекс Интернетометр',
@@ -339,13 +346,13 @@ function historyChart(records) {
 	downloadPoints = series('download_mbps');
 	uploadPoints = series('upload_mbps');
 	points = [
-		E('line', { x1: pad, y1: height - pad, x2: width - pad, y2: height - pad, 'class': 'yandex-internetometer-chart-axis' }),
-		E('polyline', { points: downloadPoints.map(function(point) { return point.x.toFixed(1) + ',' + point.y.toFixed(1); }).join(' '), 'class': 'yandex-internetometer-chart-line is-download' }),
-		E('polyline', { points: uploadPoints.map(function(point) { return point.x.toFixed(1) + ',' + point.y.toFixed(1); }).join(' '), 'class': 'yandex-internetometer-chart-line is-upload' })
-	].concat(downloadPoints.map(function(point) { return E('circle', { cx: point.x, cy: point.y, r: 4, 'class': 'yandex-internetometer-chart-point is-download' }); }))
-		.concat(uploadPoints.map(function(point) { return E('circle', { cx: point.x, cy: point.y, r: 4, 'class': 'yandex-internetometer-chart-point is-upload' }); }));
+		svgNode('line', { x1: pad, y1: height - pad, x2: width - pad, y2: height - pad, 'class': 'yandex-internetometer-chart-axis' }),
+		svgNode('polyline', { points: downloadPoints.map(function(point) { return point.x.toFixed(1) + ',' + point.y.toFixed(1); }).join(' '), 'class': 'yandex-internetometer-chart-line is-download' }),
+		svgNode('polyline', { points: uploadPoints.map(function(point) { return point.x.toFixed(1) + ',' + point.y.toFixed(1); }).join(' '), 'class': 'yandex-internetometer-chart-line is-upload' })
+	].concat(downloadPoints.map(function(point) { return svgNode('circle', { cx: point.x, cy: point.y, r: 4, 'class': 'yandex-internetometer-chart-point is-download' }); }))
+		.concat(uploadPoints.map(function(point) { return svgNode('circle', { cx: point.x, cy: point.y, r: 4, 'class': 'yandex-internetometer-chart-point is-upload' }); }));
 	return E('div', { 'class': 'yandex-internetometer-chart' }, [
-		E('svg', { viewBox: '0 0 ' + width + ' ' + height, preserveAspectRatio: 'none', role: 'img', 'aria-label': T('History') }, points),
+		svgNode('svg', { viewBox: '0 0 ' + width + ' ' + height, preserveAspectRatio: 'none', role: 'img', 'aria-label': T('History') }, points),
 		E('div', { 'class': 'yandex-internetometer-chart-legend' }, [
 			E('span', { 'class': 'is-download' }, T('Incoming')),
 			E('span', { 'class': 'is-upload' }, T('Outgoing'))
@@ -416,14 +423,51 @@ function renderHistory() {
 }
 
 function updateCheck() {
+	if (updateCheckButton) {
+		updateCheckButton.disabled = true;
+		updateCheckButton.textContent = T('Checking for updates');
+	}
 	return fs.exec_direct('/usr/libexec/yandex-internetometer/update-check', [], 'json').then(function(data) {
 		updateData = data || { ok: false };
+		updateData.manualCheck = true;
+		statusLayoutKey = null;
 		renderStatus(statusData);
+		if (updateCheckButton) {
+			updateCheckButton.disabled = false;
+			updateCheckButton.textContent = T('Check for updates');
+		}
 		return updateData;
 	}).catch(function() {
 		updateData = { ok: false, manual: true };
+		statusLayoutKey = null;
 		renderStatus(statusData);
+		if (updateCheckButton) {
+			updateCheckButton.disabled = false;
+			updateCheckButton.textContent = T('Check for updates');
+		}
 	});
+}
+
+function copyUpdateCommand(button) {
+	function copied() {
+		button.textContent = T('Command copied');
+		window.setTimeout(function() { button.textContent = T('Copy command'); }, 1800);
+	}
+	function fallback() {
+		var input = document.createElement('textarea');
+		input.value = updateCommand;
+		input.setAttribute('readonly', '');
+		input.style.position = 'fixed';
+		input.style.opacity = '0';
+		document.body.appendChild(input);
+		input.select();
+		document.execCommand('copy');
+		document.body.removeChild(input);
+		copied();
+	}
+	if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText)
+		return navigator.clipboard.writeText(updateCommand).then(copied).catch(fallback);
+	fallback();
 }
 
 function numericValue(value, fallback) {
@@ -624,14 +668,22 @@ function renderUpdateNotice() {
 	if (!updateData.ok)
 		return updateData.manual ? E('div', { 'class': 'alert-message warning' }, T('Unable to check updates. Check the connection and try again.')) : null;
 	if (!updateData.update_available)
-		return null;
+		return updateData.manualCheck ? E('div', { 'class': 'alert-message notice yandex-internetometer-update is-current' }, [
+			E('strong', {}, T('No updates available')),
+			E('span', {}, T('Installed version %s').format(updateData.installed_version || ''))
+		]) : null;
 	release = updateData.release || {};
 	return E('div', { 'class': 'alert-message notice yandex-internetometer-update' }, [
 		E('strong', {}, '%s %s'.format(T('Update available'), release.version || '')),
 		E('span', {}, T('Installed version %s').format(updateData.installed_version || '')),
 		E('a', { 'class': 'btn cbi-button', 'href': release.release_url || 'https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest', 'target': '_blank', 'rel': 'noopener' }, T('Open release')),
-		E('div', { 'class': 'yandex-internetometer-update-command' }, [ E('span', {}, T('Update command')), E('code', {}, 'curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh -s -- --yes') ]),
-		E('button', { 'class': 'btn cbi-button', 'click': updateCheck }, T('Check for updates'))
+		E('div', { 'class': 'yandex-internetometer-update-command' }, [
+			E('span', {}, T('Update command')),
+			E('div', { 'class': 'yandex-internetometer-update-command-row' }, [
+				E('code', {}, updateCommand),
+				E('button', { 'type': 'button', 'class': 'btn cbi-button', 'click': function(ev) { return copyUpdateCommand(ev.currentTarget); } }, T('Copy command'))
+			])
+		])
 	]);
 }
 
@@ -1035,9 +1087,10 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
-		o = s.option(form.Flag, 'debug', T('Debug mode'));
+		o = s.option(form.Flag, 'debug', T('Diagnostic log'));
 		o.default = '0';
 		o.rmempty = false;
+		o.description = T('Writes additional troubleshooting messages to /var/run/yandex-internetometer/debug.log. Enable it only while diagnosing a problem; the log is removed after reboot.');
 
 		return m.render().then(function(formNode) {
 			statusBox = E('div');
@@ -1100,7 +1153,7 @@ return view.extend({
 					'.yandex-internetometer-update strong{color:#9d2e1e}',
 					'.yandex-internetometer-update a{color:#9d2e1e;font-weight:700}',
 					'.yandex-internetometer-update-command{flex:1 0 100%;display:grid;gap:5px;margin-top:2px;color:#514841;font-size:12px}',
-					'.yandex-internetometer-update-command code{display:block;max-width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e3cfc9;border-radius:7px;background:#fff;color:#252528;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:nowrap}',
+					'.yandex-internetometer-update-command-row{display:flex;align-items:stretch;gap:8px}.yandex-internetometer-update-command code{display:block;flex:1 1 auto;min-width:0;max-width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e3cfc9;border-radius:7px;background:#fff;color:#252528;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:nowrap}.yandex-internetometer-update-command-row .btn{flex:0 0 auto;border:1px solid #d59e92;border-radius:7px;background:#fff;color:#762b20;font-weight:700;cursor:pointer}.yandex-internetometer-update.is-current{border-color:#a9d8c0;background:#f1fbf5;color:#214d35}.yandex-internetometer-update.is-current strong{color:#167548}',
 					'.yandex-internetometer-history{margin:18px 0 0;padding:20px;border:1px solid var(--yi-border);border-radius:12px;background:var(--yi-bg);color:var(--yi-text)}',
 					'.yandex-internetometer-history-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.yandex-internetometer-history-head h3{margin:0 0 3px;font-size:20px}.yandex-internetometer-history-head span{color:var(--yi-muted);font-size:13px}.yandex-internetometer-history-head select{min-height:38px;padding:7px 34px 7px 11px;border:1px solid var(--yi-border);border-radius:8px;background:var(--yi-panel);color:var(--yi-text)}',
 					'.yandex-internetometer-chart{height:280px;padding:10px 0 4px;border:1px solid var(--yi-border);border-radius:10px;background:var(--yi-panel)}.yandex-internetometer-chart svg{display:block;width:100%;height:235px}.yandex-internetometer-chart-axis{stroke:var(--yi-border);stroke-width:2}.yandex-internetometer-chart-line{fill:none;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.yandex-internetometer-chart-line.is-download{stroke:var(--yi-red)}.yandex-internetometer-chart-line.is-upload{stroke:var(--yi-green)}.yandex-internetometer-chart-point.is-download{fill:var(--yi-red)}.yandex-internetometer-chart-point.is-upload{fill:var(--yi-green)}.yandex-internetometer-chart-legend{display:flex;justify-content:center;gap:22px;font-size:12px}.yandex-internetometer-chart-legend span:before{content:"";display:inline-block;width:16px;height:3px;margin:0 7px 3px 0;background:currentColor}.yandex-internetometer-chart-legend .is-download{color:var(--yi-red)}.yandex-internetometer-chart-legend .is-upload{color:var(--yi-green)}',
@@ -1121,6 +1174,7 @@ return view.extend({
 					'.yandex-internetometer-settings input[type="checkbox"]{width:20px;height:20px;margin:10px 0;accent-color:#ff5138;vertical-align:middle}',
 					'.yandex-internetometer-settings .cbi-value-description{grid-column:2;float:none;width:auto;margin:1px 0 0;color:#555b65;font-size:13px;line-height:1.48}',
 					'.yandex-internetometer-theme-dark .yandex-internetometer-language{background:#292e38;color:#f5f7fa;border-color:#4b5360}',
+					'.yandex-internetometer-theme-dark .yandex-internetometer-update{border-color:#70483f;background:#2d2423;color:#f4ded8}.yandex-internetometer-theme-dark .yandex-internetometer-update strong,.yandex-internetometer-theme-dark .yandex-internetometer-update a{color:#ff9b89}.yandex-internetometer-theme-dark .yandex-internetometer-update-command{color:#d4bdb7}.yandex-internetometer-theme-dark .yandex-internetometer-update-command code{border-color:#5e4843;background:#191b20;color:#f5f7fa}.yandex-internetometer-theme-dark .yandex-internetometer-update-command-row .btn{border-color:#70564f;background:#292e38;color:#ffd0c7}.yandex-internetometer-theme-dark .yandex-internetometer-update.is-current{border-color:#35694e;background:#1e3027;color:#d7f3e3}.yandex-internetometer-theme-dark .yandex-internetometer-update.is-current strong{color:#66d49a}',
 					'.yandex-internetometer-theme-dark .yandex-internetometer-settings{color:#f5f7fa}',
 					'.yandex-internetometer-theme-dark .yandex-internetometer-settings>summary{border-color:#454d5b;color:#f5f7fa}',
 					'.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-map,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-section,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-section-node,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value-title,.yandex-internetometer-theme-dark .yandex-internetometer-settings .cbi-value-field{color:#f5f7fa !important}',
@@ -1132,7 +1186,7 @@ return view.extend({
 					'.yandex-internetometer-theme-dark .yandex-internetometer-detail-row span{color:#b8c0cc}',
 					'.yandex-internetometer-theme-dark .yandex-internetometer-detail-row strong{color:#f5f7fa}',
 					'@media (max-width:900px){.yandex-internetometer-speed-metric{width:160px}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:48px}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
-					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}.yandex-internetometer-history{padding:14px}.yandex-internetometer-history-head{align-items:stretch;flex-direction:column}.yandex-internetometer-history-metrics{grid-template-columns:1fr}.yandex-internetometer-chart{height:220px}.yandex-internetometer-chart svg{height:176px}.yandex-internetometer-settings{margin-top:16px}.yandex-internetometer-settings>summary{padding:13px 14px}.yandex-internetometer-settings>*:not(summary){padding:0 14px 4px}.yandex-internetometer-settings .cbi-value{grid-template-columns:1fr;gap:7px;padding:16px 0}.yandex-internetometer-settings .cbi-value-title{padding:0 0 0 14px}.yandex-internetometer-settings .cbi-value-description{grid-column:1}.yandex-internetometer-update{align-items:flex-start}.yandex-internetometer-update-command code{font-size:11px}}',
+					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}.yandex-internetometer-history{padding:14px}.yandex-internetometer-history-head{align-items:stretch;flex-direction:column}.yandex-internetometer-history-metrics{grid-template-columns:1fr}.yandex-internetometer-chart{height:220px}.yandex-internetometer-chart svg{height:176px}.yandex-internetometer-settings{margin-top:16px}.yandex-internetometer-settings>summary{padding:13px 14px}.yandex-internetometer-settings>*:not(summary){padding:0 14px 4px}.yandex-internetometer-settings .cbi-value{grid-template-columns:1fr;gap:7px;padding:16px 0}.yandex-internetometer-settings .cbi-value-title{padding:0 0 0 14px}.yandex-internetometer-settings .cbi-value-description{grid-column:1}.yandex-internetometer-update{align-items:flex-start}.yandex-internetometer-update-command-row{width:100%;flex-direction:column}.yandex-internetometer-update-command code{font-size:11px}.yandex-internetometer-update-command-row .btn{min-height:38px}}',
 				].join('')),
 				E('div', { 'class': 'yandex-internetometer-topbar' }, [
 					E('button', {
@@ -1154,6 +1208,12 @@ return view.extend({
 							window.location.reload();
 						}
 					}, appTheme === 'dark' ? T('Light theme') : T('Dark theme'))
+					,
+					(updateCheckButton = E('button', {
+						'type': 'button',
+						'class': 'yandex-internetometer-language',
+						'click': updateCheck
+					}, T('Check for updates')))
 				]),
 				E('h2', {}, T('Yandex Internetometer')),
 				E('p', {}, T('Unofficial Yandex Internetometer-compatible speed test using Yandex probe servers. This is not official Yandex software.')),
