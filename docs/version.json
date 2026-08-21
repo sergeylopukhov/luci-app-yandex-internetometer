@@ -1,8 +1,8 @@
 {
-  "version": "1.0.1",
-  "package_version": "1.0.1-r1",
-  "tag": "v1.0.1",
-  "release_url": "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/tag/v1.0.1",
+  "version": "1.0.2",
+  "package_version": "1.0.2-r1",
+  "tag": "v1.0.2",
+  "release_url": "https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/tag/v1.0.2",
   "install_url": "https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh",
-  "published_at": "2026-08-21T11:53:10Z"
+  "published_at": "2026-08-21T14:36:34Z"
 }
