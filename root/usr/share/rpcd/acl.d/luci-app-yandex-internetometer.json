@@ -4,6 +4,7 @@
 		"read": {
 			"uci": [ "yandex-internetometer" ],
 			"file": {
+				"/usr/libexec/yandex-internetometer/history": [ "exec" ],
 				"/usr/libexec/yandex-internetometer/status": [ "exec" ],
 				"/usr/libexec/yandex-internetometer/update-check": [ "exec" ]
 			}
@@ -11,6 +12,7 @@
 		"write": {
 			"uci": [ "yandex-internetometer" ],
 			"file": {
+				"/usr/libexec/yandex-internetometer/history-clear": [ "exec" ],
 				"/usr/libexec/yandex-internetometer/start": [ "exec" ],
 				"/usr/libexec/yandex-internetometer/stop": [ "exec" ]
 			}
