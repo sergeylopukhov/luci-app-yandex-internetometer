@@ -23,7 +23,7 @@ printf '%s\n' "$result" | jq -e '.ok == true and (.records | length) == 3' >/dev
 printf '%s\n' "$result" | jq -e '.records[0].download_mbps == 2 and .records[2].download_mbps == 4' >/dev/null
 printf '%s\n' "$result" | jq -e 'all(.records[]; has("public_ip") | not)' >/dev/null
 
-[ "$(stat -f %Lp "$YANDEX_INTERNETOMETER_HISTORY_DIR/history.jsonl" 2>/dev/null || stat -c %a "$YANDEX_INTERNETOMETER_HISTORY_DIR/history.jsonl")" = 600 ]
+[ "$(stat -c %a "$YANDEX_INTERNETOMETER_HISTORY_DIR/history.jsonl" 2>/dev/null || stat -f %Lp "$YANDEX_INTERNETOMETER_HISTORY_DIR/history.jsonl")" = 600 ]
 
 history_clear | jq -e '.ok == true and .records == []' >/dev/null
 [ ! -e "$YANDEX_INTERNETOMETER_HISTORY_DIR/history.jsonl" ]
