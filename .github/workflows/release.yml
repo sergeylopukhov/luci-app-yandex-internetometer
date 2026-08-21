@@ -92,12 +92,15 @@ jobs:
         run: |
           set -eu
           SDK_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
+          SUMS_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/sha256sums"
+          SDK_FILE="openwrt-sdk-x86-64_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
           mkdir -p "$RUNNER_TEMP/sdk"
+          curl -fsSL --retry 5 --connect-timeout 30 -o "$RUNNER_TEMP/sha256sums" "$SUMS_URL"
           curl -fL --retry 5 --retry-delay 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 \
             -o "$RUNNER_TEMP/sdk.tar.zst" "$SDK_URL"
-          printf '%s  %s\n' \
-            '66d8715ed68f8c0aa2b5bb71dcc444bee485ea2edc022467ce7c76aed7e40160' \
-            "$RUNNER_TEMP/sdk.tar.zst" | sha256sum -c -
+          EXPECTED="$(awk -v file="*$SDK_FILE" '$2 == file { print $1; exit }' "$RUNNER_TEMP/sha256sums")"
+          test -n "$EXPECTED"
+          printf '%s  %s\n' "$EXPECTED" "$RUNNER_TEMP/sdk.tar.zst" | sha256sum -c -
           tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
 
       - name: Build apk assets
