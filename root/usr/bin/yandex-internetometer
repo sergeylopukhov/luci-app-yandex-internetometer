@@ -1,6 +1,10 @@
 #!/bin/ash
 
-STATE_DIR="/tmp/yandex-internetometer"
+STATE_DIR="${YANDEX_INTERNETOMETER_STATE_DIR:-/var/run/yandex-internetometer}"
+HISTORY_DIR="${YANDEX_INTERNETOMETER_HISTORY_DIR:-/etc/yandex-internetometer}"
+HISTORY_FILE="$HISTORY_DIR/history.jsonl"
+HISTORY_LIMIT="${YANDEX_INTERNETOMETER_HISTORY_LIMIT:-200}"
+VERSION_FILE="${YANDEX_INTERNETOMETER_VERSION_FILE:-/usr/share/yandex-internetometer/version}"
 LOCK_DIR="$STATE_DIR/lock"; PID_FILE="$STATE_DIR/pid"; RESULT_FILE="$STATE_DIR/result.json"
 LOG_FILE="$STATE_DIR/debug.log"; PROBES_FILE="$STATE_DIR/probes.json"; PUBLIC_IP_FILE="$STATE_DIR/public_ip"
 WORKER_FILE="$STATE_DIR/workers"
@@ -11,8 +15,9 @@ STREAMS=6; UPLOAD_STREAMS=6; EFFECTIVE_UPLOAD_STREAMS=""; DOWNLOAD_TIME=15; UPLO
 UPLOAD_ENABLED=1; TRANSFER_PROTOCOL=http; ACTUAL_PROTOCOL=https; HTTPS_FALLBACK=0; DEBUG=0; JSON_MODE=0; PROGRESS_PHASE=""; LATENCY_SAMPLES=60
 CHILD_PIDS=""; CURL_PIDS=""
 
-usage() { printf '%s\n' 'Usage: yandex-internetometer run [--json] [--streams N] [--upload-streams auto|N] [--transfer-protocol auto|http|https] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1] [--latency-samples N]' '       yandex-internetometer start|status|stop'; }
-ensure_state_dir() { mkdir -p "$STATE_DIR"; }
+usage() { printf '%s\n' 'Usage: yandex-internetometer run [--json] [--streams N] [--upload-streams auto|N] [--transfer-protocol auto|http|https] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1] [--latency-samples N]' '       yandex-internetometer start|status|stop|history|history-clear'; }
+ensure_state_dir() { mkdir -p "$STATE_DIR" || return 1; chmod 700 "$STATE_DIR" 2>/dev/null || true; }
+ensure_history_dir() { mkdir -p "$HISTORY_DIR" || return 1; chmod 700 "$HISTORY_DIR" 2>/dev/null || true; }
 timestamp() { date '+%Y-%m-%dT%H:%M:%S%z' | sed 's/\(..\)$/:\1/'; }
 uptime_seconds() { awk '{printf "%.3f", $1}' /proc/uptime 2>/dev/null || date +%s; }
 is_uint() { case "$1" in ''|*[!0-9]*) return 1;; *) return 0;; esac; }
@@ -28,9 +33,30 @@ public_ip() {
 	case "$ip" in *.*.*.*) printf '%s\n' "$ip" > "$PUBLIC_IP_FILE"; printf %s "$ip";; esac
 }
 json_result() {
-	jq -cn --argjson ok "$1" --argjson running "$2" --arg timestamp "$(timestamp)" --arg phase "$PROGRESS_PHASE" --arg download "$3" --arg upload "$4" --arg ping "$5" --arg jitter "$6" --argjson probe_count "${7:-0}" --arg server "$8" --arg error "$9" --arg protocol "$ACTUAL_PROTOCOL" --argjson fallback "$HTTPS_FALLBACK" --arg requested "$TRANSFER_PROTOCOL" --arg version "$(cat /usr/share/yandex-internetometer/version 2>/dev/null || printf 1.0.1)" --arg public_ip "$(public_ip)" --arg upload_streams "${EFFECTIVE_UPLOAD_STREAMS:-$UPLOAD_STREAMS}" --argjson streams "$STREAMS" --argjson download_time "$DOWNLOAD_TIME" --argjson upload_time "$UPLOAD_TIME" --argjson upload_enabled "$UPLOAD_ENABLED" --argjson latency_samples "$LATENCY_SAMPLES" '
+	jq -cn --argjson ok "$1" --argjson running "$2" --arg timestamp "$(timestamp)" --arg phase "$PROGRESS_PHASE" --arg download "$3" --arg upload "$4" --arg ping "$5" --arg jitter "$6" --argjson probe_count "${7:-0}" --arg server "$8" --arg error "$9" --arg protocol "$ACTUAL_PROTOCOL" --argjson fallback "$HTTPS_FALLBACK" --arg requested "$TRANSFER_PROTOCOL" --arg version "$(cat "$VERSION_FILE" 2>/dev/null || printf 1.0.1)" --arg public_ip "$(public_ip)" --arg upload_streams "${EFFECTIVE_UPLOAD_STREAMS:-$UPLOAD_STREAMS}" --argjson streams "$STREAMS" --argjson download_time "$DOWNLOAD_TIME" --argjson upload_time "$UPLOAD_TIME" --argjson upload_enabled "$UPLOAD_ENABLED" --argjson latency_samples "$LATENCY_SAMPLES" '
 		def n($x): if $x == "" or $x == "null" then null else (try ($x|tonumber) catch null) end;
 		{ok:$ok,running:$running,timestamp:$timestamp,phase:(if $phase=="" then null else $phase end),download_mbps:n($download),upload_mbps:n($upload),ping_ms:n($ping),jitter_ms:n($jitter),streams:$streams,upload_streams:n($upload_streams),download_time:$download_time,upload_time:$upload_time,upload_enabled:$upload_enabled,latency_samples:$latency_samples,probe_count:$probe_count,public_ip:(if $public_ip=="" then null else $public_ip end),server:(if $server=="" or $server=="null" then null else $server end),error:(if $error=="" or $error=="null" then null else $error end),transfer_protocol:$protocol,requested_transfer_protocol:$requested,https_fallback:($fallback==1),version:$version}'
+}
+history_append() {
+	ensure_history_dir || return 1
+	record="$(printf '%s\n' "$1" | jq -c --arg id "$(date +%s)-$$" '{id:$id,timestamp,download_mbps,upload_mbps,ping_ms,jitter_ms,streams,upload_streams,server,transfer_protocol,version}')" || return 1
+	printf '%s\n' "$record" >> "$HISTORY_FILE" || return 1
+	chmod 600 "$HISTORY_FILE" 2>/dev/null || true
+	lines="$(wc -l < "$HISTORY_FILE" | tr -d ' ')"
+	if [ "$lines" -gt "$HISTORY_LIMIT" ]; then
+		tmp="$HISTORY_FILE.tmp.$$"
+		tail -n "$HISTORY_LIMIT" "$HISTORY_FILE" > "$tmp" && chmod 600 "$tmp" 2>/dev/null && mv "$tmp" "$HISTORY_FILE"
+	fi
+}
+history_test() {
+	ensure_history_dir
+	[ -s "$HISTORY_FILE" ] || { printf '%s\n' '{"ok":true,"records":[]}'; return; }
+	jq -Rsc 'split("\n") | map(select(length > 0) | fromjson?) | {ok:true,records:.}' "$HISTORY_FILE"
+}
+history_clear() {
+	ensure_history_dir
+	rm -f "$HISTORY_FILE" "$HISTORY_FILE.tmp."*
+	printf '%s\n' '{"ok":true,"records":[]}'
 }
 write_progress() { PROGRESS_PHASE="$1"; json_result true "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" > "$RESULT_FILE.progress" && mv "$RESULT_FILE.progress" "$RESULT_FILE"; }
 
@@ -92,9 +118,10 @@ run_test() {
 	: > "$LOG_FILE"; : > "$WORKER_FILE"; write_progress prepare true null null null null 0 null null; fetch_probes; probes="$(probe_count)"; server="$(server_name)"; [ -n "$server" ] || server='Yandex CDN'; transfer_urls download > "$tmpdir/download.urls"; transfer_urls upload > "$tmpdir/upload.urls"; [ -s "$tmpdir/download.urls" ] || fail 'No safe Yandex download probes are available'; [ "$UPLOAD_ENABLED" = 0 ] || [ -s "$tmpdir/upload.urls" ] || fail 'No safe Yandex upload probes are available'; select_transport "$tmpdir/download.urls" "$tmpdir/upload.urls"; write_progress prepare true null null null null "$probes" "$server" null
 	measure_latency "$tmpdir/latency" "$probes" "$server"; set -- $(latency_stats "$tmpdir/latency"); ping="$1"; jitter="$2"; PING_VALUE="$ping"; JITTER_VALUE="$jitter"; PROBES_VALUE="$probes"; SERVER_VALUE="$server"; set -- $(measure_bandwidth download "$tmpdir/download.urls" "$tmpdir" "$DOWNLOAD_TIME" ''); download="$(mbps "$1" "$2")"; DOWNLOAD_VALUE="$download"; write_progress download true "$download" null "$ping" "$jitter" "$probes" "$server" null
 	if [ "$UPLOAD_ENABLED" = 1 ]; then choose_upload_streams "$tmpdir/upload.urls"; prepare_sparse "$tmpdir/payload"; set -- $(measure_bandwidth upload "$tmpdir/upload.urls" "$tmpdir" "$UPLOAD_TIME" "$tmpdir/payload"); upload="$(mbps "$1" "$2")"; else upload=null; fi
-	PROGRESS_PHASE=complete; json="$(json_result true false "$download" "$upload" "$ping" "$jitter" "$probes" "$server" null)"; printf '%s\n' "$json" > "$RESULT_FILE"; [ "$JSON_MODE" = 1 ] && printf '%s\n' "$json" || printf 'Download: %s Mbps\nUpload: %s Mbps\nPing: %s ms\nJitter: %s ms\nServer: %s\n' "$download" "$upload" "$ping" "$jitter" "$server"
+	PROGRESS_PHASE=complete; json="$(json_result true false "$download" "$upload" "$ping" "$jitter" "$probes" "$server" null)"; printf '%s\n' "$json" > "$RESULT_FILE"; history_append "$json" || debug_log 'Unable to save measurement history'; [ "$JSON_MODE" = 1 ] && printf '%s\n' "$json" || printf 'Download: %s Mbps\nUpload: %s Mbps\nPing: %s ms\nJitter: %s ms\nServer: %s\n' "$download" "$upload" "$ping" "$jitter" "$server"
 }
 start_test() { ensure_state_dir; running_pid && { json_result true true null null null null 0 null null; return; }; rm -rf "$LOCK_DIR"; PROGRESS_PHASE=prepare; json_result true true null null null null 0 null null > "$RESULT_FILE"; ("$SELF" run --json > "$RESULT_FILE.tmp" 2>>"$LOG_FILE"; mv "$RESULT_FILE.tmp" "$RESULT_FILE") & printf '%s\n' "$!" > "$PID_FILE"; json_result true true null null null null 0 null null; }
 status_test() { ensure_state_dir; if running_pid; then [ -s "$RESULT_FILE" ] && jq '.running=true' "$RESULT_FILE" || json_result true true null null null null 0 null null; else rm -f "$PID_FILE"; rm -rf "$LOCK_DIR"; [ -s "$RESULT_FILE" ] && jq --arg ip "$(public_ip)" '.running=false | .public_ip=if $ip=="" then .public_ip else $ip end' "$RESULT_FILE" || json_result true false null null null null 0 null null; fi; }
 stop_test() { kill_children; if running_pid; then pid="$(cat "$PID_FILE")"; kill "$pid" 2>/dev/null || true; sleep 1; kill -9 "$pid" 2>/dev/null || true; fi; rm -f "$PID_FILE" "$RESULT_FILE.tmp"; rm -rf "$LOCK_DIR"; json_result true false null null null null 0 null null; }
-load_config; command="$1"; [ -n "$command" ] || { usage; exit 1; }; shift; case "$command" in run) parse_run_args "$@"; validate_settings; run_test;; start) start_test;; status) status_test;; stop) stop_test;; *) usage; exit 1;; esac
+if [ "${YANDEX_INTERNETOMETER_LIBRARY:-0}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
+load_config; command="$1"; [ -n "$command" ] || { usage; exit 1; }; shift; case "$command" in run) parse_run_args "$@"; validate_settings; run_test;; start) start_test;; status) status_test;; stop) stop_test;; history) history_test;; history-clear) history_clear;; *) usage; exit 1;; esac

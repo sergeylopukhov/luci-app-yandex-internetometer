@@ -1,0 +1,2 @@
+#!/bin/ash
+exec /usr/bin/yandex-internetometer history "$@"
