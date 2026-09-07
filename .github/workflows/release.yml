@@ -9,15 +9,15 @@ on:
       release_tag:
         description: Existing immutable tag to publish
         required: true
-        default: v1.0.2
+        default: v1.1.0
 
 permissions:
   contents: write
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PROJECT_VERSION: 1.0.2
-  PKG_VERSION: 1.0.2-r1
+  PROJECT_VERSION: 1.1.0
+  PKG_VERSION: 1.1.0-r1
 
 jobs:
   build:
@@ -40,6 +40,18 @@ jobs:
           tests/test-history.sh
           tests/test-release-metadata.sh
           node tests/test-history-ui.js
+          node tests/test-status-ui.js
+          sh tests/test-state.sh
+          sudo apt-get install -y libcurl4-openssl-dev
+          cc -Wall -Wextra -Werror -O2 src/transfer.c -lcurl -o /tmp/yi-transfer-test
+          python3 tests/test-transfer.py /tmp/yi-transfer-test
+
+      # The legacy workflow duplicated a noarch payload across architecture names.
+      # Native code must be built with each target SDK, never relabelled.
+      - name: Require native release packaging
+        run: |
+          echo 'This branch includes a native libcurl engine. Use the target OpenWrt SDK to build Makefile; the legacy noarch release publisher is disabled.' >&2
+          exit 1
 
       - name: Prepare package root
         run: |

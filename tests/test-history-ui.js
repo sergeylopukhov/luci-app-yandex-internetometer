@@ -24,6 +24,8 @@ TestNode.prototype.appendChild = function(child) {
 	return child;
 };
 
+TestNode.prototype.addEventListener = function() {};
+
 if (cutoff < 0)
 	throw new Error('Unable to locate LuCI view export');
 
@@ -72,8 +74,8 @@ if (context.singleChart.tag !== 'div')
 	throw new Error('Single-record chart failed');
 if (context.singleChart.children[0].namespaceURI !== 'http://www.w3.org/2000/svg')
 	throw new Error('Chart root is not an SVG element');
-if (!context.singleChart.children[0].childNodes.some(function(node) { return node.tagName === 'polyline' && node.namespaceURI === 'http://www.w3.org/2000/svg'; }))
-	throw new Error('Chart series is not an SVG polyline');
+if (!context.singleChart.children[0].childNodes.some(function(node) { return node.tagName === 'circle' && node.attributes['class'] === 'yandex-internetometer-chart-point is-download'; }))
+	throw new Error('Chart series is missing an SVG point for a single record');
 if (source.indexOf("(updateCheckButton = E('button'") < 0 || source.indexOf("T('Copy command')") < 0)
 	throw new Error('Update controls are missing');
 if (source.indexOf('.yandex-internetometer-theme-dark .yandex-internetometer-update') < 0)

@@ -1,15 +1,15 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-yandex-internetometer
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=OpenWrt community
 PKG_LICENSE:=MIT
 
 LUCI_TITLE:=LuCI support for Yandex Internetometer-compatible speed test
-LUCI_DEPENDS:=+curl +jq
-LUCI_PKGARCH:=all
+LUCI_DEPENDS:=+curl +jq +libcurl
+LUCI_PKGARCH:=$(ARCH)
 
 define Package/$(PKG_NAME)/postinst
 #!/bin/sh
@@ -18,14 +18,14 @@ rm -f /tmp/luci-indexcache.* 2>/dev/null || true
 if command -v uci >/dev/null 2>&1; then
 	streams="$$(uci -q get yandex-internetometer.main.streams 2>/dev/null || true)"
 	if [ -z "$$streams" ]; then
-		uci -q set yandex-internetometer.main.streams='6' 2>/dev/null || true
+		uci -q set yandex-internetometer.main.streams='auto' 2>/dev/null || true
 	fi
 	upload_streams="$$(uci -q get yandex-internetometer.main.upload_streams 2>/dev/null || true)"
 	if [ -z "$$upload_streams" ]; then
-		uci -q set yandex-internetometer.main.upload_streams='6' 2>/dev/null || true
+		uci -q set yandex-internetometer.main.upload_streams='auto' 2>/dev/null || true
 	fi
 	protocol="$$(uci -q get yandex-internetometer.main.transfer_protocol 2>/dev/null || true)"
-	[ -n "$$protocol" ] || uci -q set yandex-internetometer.main.transfer_protocol='http' 2>/dev/null || true
+	[ -n "$$protocol" ] || uci -q set yandex-internetometer.main.transfer_protocol='auto' 2>/dev/null || true
 	download_time="$$(uci -q get yandex-internetometer.main.download_time 2>/dev/null || true)"
 	[ -n "$$download_time" ] || uci -q set yandex-internetometer.main.download_time='15' 2>/dev/null || true
 	upload_time="$$(uci -q get yandex-internetometer.main.upload_time 2>/dev/null || true)"
