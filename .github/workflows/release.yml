@@ -59,6 +59,8 @@ jobs:
           test -n "$EXPECTED"
           printf '%s  %s\n' "$EXPECTED" "$RUNNER_TEMP/sdk.tar.zst" | sha256sum -c -
           tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
+          make -C "$RUNNER_TEMP/sdk" defconfig
+          make -C "$RUNNER_TEMP/sdk" package/libs/curl/compile V=s
 
       - name: Prepare x86/64 package root
         run: |
@@ -76,7 +78,7 @@ jobs:
           CC="$(find "$RUNNER_TEMP/sdk"/staging_dir/toolchain-x86_64_*/bin -name '*-gcc' -type f | head -1)"
           test -x "$CC"
           mkdir -p "$PKGROOT/usr/libexec/yandex-internetometer"
-          "$CC" -O2 -Wall -Wextra src/transfer.c -lcurl -o "$PKGROOT/usr/libexec/yandex-internetometer/transfer"
+          STAGING_DIR="$RUNNER_TEMP/sdk/staging_dir" "$CC" -O2 -Wall -Wextra src/transfer.c -lcurl -o "$PKGROOT/usr/libexec/yandex-internetometer/transfer"
           chmod 0755 "$PKGROOT/usr/libexec/yandex-internetometer/transfer"
           find "$PKGROOT" -type d -print
           find "$PKGROOT" -type f -print
