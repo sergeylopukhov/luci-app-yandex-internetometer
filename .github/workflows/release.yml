@@ -61,7 +61,7 @@ jobs:
           tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
           make -C "$RUNNER_TEMP/sdk" package/symlinks
           "$RUNNER_TEMP/sdk/scripts/feeds" update base
-          "$RUNNER_TEMP/sdk/scripts/feeds" install libcurl
+          "$RUNNER_TEMP/sdk/scripts/feeds" install curl
           make -C "$RUNNER_TEMP/sdk" defconfig
           make -C "$RUNNER_TEMP/sdk" package/feeds/base/curl/compile V=s
 
