@@ -46,14 +46,21 @@ jobs:
           cc -Wall -Wextra -Werror -O2 src/transfer.c -lcurl -o /tmp/yi-transfer-test
           python3 tests/test-transfer.py /tmp/yi-transfer-test
 
-      # The legacy workflow duplicated a noarch payload across architecture names.
-      # Native code must be built with each target SDK, never relabelled.
-      - name: Require native release packaging
+      - name: Download x86/64 OpenWrt SDK
         run: |
-          echo 'This branch includes a native libcurl engine. Use the target OpenWrt SDK to build Makefile; the legacy noarch release publisher is disabled.' >&2
-          exit 1
+          set -eu
+          SDK_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
+          SUMS_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/sha256sums"
+          SDK_FILE="openwrt-sdk-x86-64_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
+          mkdir -p "$RUNNER_TEMP/sdk"
+          curl -fsSL --retry 5 --connect-timeout 30 -o "$RUNNER_TEMP/sha256sums" "$SUMS_URL"
+          curl -fL --retry 5 --retry-delay 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 -o "$RUNNER_TEMP/sdk.tar.zst" "$SDK_URL"
+          EXPECTED="$(awk -v file="*$SDK_FILE" '$2 == file { print $1; exit }' "$RUNNER_TEMP/sha256sums")"
+          test -n "$EXPECTED"
+          printf '%s  %s\n' "$EXPECTED" "$RUNNER_TEMP/sdk.tar.zst" | sha256sum -c -
+          tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
 
-      - name: Prepare package root
+      - name: Prepare x86/64 package root
         run: |
           set -eu
           PKGROOT="$RUNNER_TEMP/pkgroot"
@@ -66,6 +73,11 @@ jobs:
           python3 scripts/po2lmo.py \
             po/ru/yandex-internetometer.po \
             "$PKGROOT/usr/lib/lua/luci/i18n/yandex-internetometer.ru.lmo"
+          CC="$(find "$RUNNER_TEMP/sdk"/staging_dir/toolchain-x86_64_*/bin -name '*-gcc' -type f | head -1)"
+          test -x "$CC"
+          mkdir -p "$PKGROOT/usr/libexec/yandex-internetometer"
+          "$CC" -O2 -Wall -Wextra src/transfer.c -lcurl -o "$PKGROOT/usr/libexec/yandex-internetometer/transfer"
+          chmod 0755 "$PKGROOT/usr/libexec/yandex-internetometer/transfer"
           find "$PKGROOT" -type d -print
           find "$PKGROOT" -type f -print
 
@@ -85,7 +97,7 @@ jobs:
           Section: luci
           URL: https://github.com/sergeylopukhov/luci-app-yandex-internetometer
           Maintainer: Sergey Lopukhov
-          Architecture: all
+          Architecture: x86_64
           Description:  LuCI app for unofficial Yandex Internetometer-compatible speed tests
           EOF
           cat > "$WORK/control/conffiles" <<EOF
@@ -97,23 +109,8 @@ jobs:
           tar --numeric-owner --owner=0 --group=0 -czf "$WORK/data.tar.gz" -C "$PKGROOT" .
           tar --numeric-owner --owner=0 --group=0 -czf "$WORK/control.tar.gz" -C "$WORK/control" .
           tar --numeric-owner --owner=0 --group=0 -czf \
-            "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-24.10-all.ipk" \
+            "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-x86_64.ipk" \
             -C "$WORK" ./debian-binary ./data.tar.gz ./control.tar.gz
-
-      - name: Download apk-capable OpenWrt SDK
-        run: |
-          set -eu
-          SDK_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/openwrt-sdk-x86-64_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
-          SUMS_URL="https://downloads.openwrt.org/snapshots/targets/x86/64/sha256sums"
-          SDK_FILE="openwrt-sdk-x86-64_gcc-14.4.0_musl.Linux-x86_64.tar.zst"
-          mkdir -p "$RUNNER_TEMP/sdk"
-          curl -fsSL --retry 5 --connect-timeout 30 -o "$RUNNER_TEMP/sha256sums" "$SUMS_URL"
-          curl -fL --retry 5 --retry-delay 5 --connect-timeout 30 --speed-time 60 --speed-limit 1024 \
-            -o "$RUNNER_TEMP/sdk.tar.zst" "$SDK_URL"
-          EXPECTED="$(awk -v file="*$SDK_FILE" '$2 == file { print $1; exit }' "$RUNNER_TEMP/sha256sums")"
-          test -n "$EXPECTED"
-          printf '%s  %s\n' "$EXPECTED" "$RUNNER_TEMP/sdk.tar.zst" | sha256sum -c -
-          tar -I zstd -xf "$RUNNER_TEMP/sdk.tar.zst" -C "$RUNNER_TEMP/sdk" --strip-components=1
 
       - name: Build apk assets
         env:
@@ -126,59 +123,11 @@ jobs:
           test -n "${APK_PRIVATE_KEY:-}" || { echo 'YANDEX_INTERNETOMETER_APK_PRIVATE_KEY is required' >&2; exit 1; }
           printf '%s\n' "$APK_PRIVATE_KEY" > "$SDK/private-key.pem"
           openssl ec -in "$SDK/private-key.pem" -pubout -out "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub"
-          ARCHES="
-          aarch64
-          aarch64_cortex-a53
-          aarch64_cortex-a72
-          aarch64_cortex-a76
-          aarch64_generic
-          armhf
-          armv7
-          arm_arm1176jzf-s_vfp
-          arm_arm926ej-s
-          arm_cortex-a15_neon-vfpv4
-          arm_cortex-a5_vfpv4
-          arm_cortex-a7
-          arm_cortex-a7_neon-vfpv4
-          arm_cortex-a7_vfpv4
-          arm_cortex-a8_vfpv3
-          arm_cortex-a9
-          arm_cortex-a9_neon
-          arm_cortex-a9_vfpv3-d16
-          arm_fa526
-          arm_xscale
-          armeb_xscale
-          x86
-          i386_pentium-mmx
-          i386_pentium4
-          mips
-          mipsel
-          mips64
-          mips64el
-          mips64_mips64r2
-          mips64_octeonplus
-          mips64el_mips64r2
-          mips_24kc
-          mips_4kec
-          mips_mips32
-          mipsel_24kc
-          mipsel_24kc_24kf
-          mipsel_74kc
-          mipsel_mips32
-          powerpc64_e5500
-          powerpc_464fp
-          powerpc_8548
-          ppc64le
-          riscv64
-          riscv64_generic
-          riscv64_riscv64
-          x86_64
-          "
-          for arch in $ARCHES; do
-            "$SDK/staging_dir/host/bin/apk" mkpkg \
+          arch=x86_64
+          "$SDK/staging_dir/host/bin/apk" mkpkg \
               --info "name:$PKG_NAME" \
               --info "version:$PKG_VERSION" \
-              --info "arch:noarch" \
+              --info "arch:x86_64" \
               --info "license:MIT" \
               --info "origin:$PKG_NAME" \
               --info "url:https://github.com/sergeylopukhov/luci-app-yandex-internetometer" \
@@ -190,27 +139,24 @@ jobs:
               --script "post-deinstall:$GITHUB_WORKSPACE/scripts/post-deinstall" \
               --files "$PKGROOT" \
               --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-snapshot-$arch.apk"
-          done
 
           REPO="$GITHUB_WORKSPACE/docs/packages"
           rm -rf "$REPO" "$GITHUB_WORKSPACE/docs/keys"
           mkdir -p "$REPO" "$GITHUB_WORKSPACE/docs/keys"
           cp "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub" "$GITHUB_WORKSPACE/docs/keys/yandex-internetometer.rsa.pub"
-          for arch in $ARCHES; do
-            dir="$REPO/$arch/yandex-internetometer"
-            mkdir -p "$dir"
-            cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-snapshot-$arch.apk" "$dir/luci-app-yandex-internetometer-$PKG_VERSION.apk"
-            (
-              cd "$dir"
-              "$SDK/staging_dir/host/bin/apk" mkndx \
+          dir="$REPO/$arch/yandex-internetometer"
+          mkdir -p "$dir"
+          cp "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-snapshot-$arch.apk" "$dir/luci-app-yandex-internetometer-$PKG_VERSION.apk"
+          (
+            cd "$dir"
+            "$SDK/staging_dir/host/bin/apk" mkndx \
                 --root "$GITHUB_WORKSPACE" \
                 --keys-dir "$GITHUB_WORKSPACE" \
                 --allow-untrusted \
                 --sign "$SDK/private-key.pem" \
                 --output packages.adb \
-                *.apk
-            )
-          done
+              *.apk
+          )
 
       - name: Create checksums
         run: |
