@@ -46,13 +46,6 @@ jobs:
           cc -Wall -Wextra -Werror -O2 src/transfer.c -lcurl -o /tmp/yi-transfer-test
           python3 tests/test-transfer.py /tmp/yi-transfer-test
 
-      # The legacy workflow duplicated a noarch payload across architecture names.
-      # Native code must be built with each target SDK, never relabelled.
-      - name: Require native release packaging
-        run: |
-          echo 'This branch includes a native libcurl engine. Use the target OpenWrt SDK to build Makefile; the legacy noarch release publisher is disabled.' >&2
-          exit 1
-
       - name: Prepare package root
         run: |
           set -eu

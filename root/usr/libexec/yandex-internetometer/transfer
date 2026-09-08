@@ -1,0 +1,26 @@
+#!/bin/ash
+set -eu
+kind="$1"; duration="$2"; streams="$3"; size="$4"; urls="$5"; sample="$6"
+dir="${sample}.parts"; mkdir -p "$dir"; start="$(date +%s)"; end=$((start + duration)); payload="${sample}.payload"
+cleanup() { kill $pids 2>/dev/null || true; rm -rf "$dir" "$payload"; }
+trap cleanup EXIT INT TERM
+[ "$kind" = download ] || dd if=/dev/zero of="$payload" bs=1024 count=$(( (size + 1023) / 1024 )) 2>/dev/null
+pids=""; i=1; count="$(wc -l < "$urls")"
+while [ "$i" -le "$streams" ]; do
+  n=$(( (i - 1) % count + 1 )); url="$(sed -n "${n}p" "$urls")"; out="$dir/$i"; : > "$out"
+  (
+    while [ "$(date +%s)" -lt "$end" ]; do
+      if [ "$kind" = download ]; then curl -fsS --connect-timeout 4 --max-time 3 -o /dev/null -w '%{size_download}\n' "$url" >> "$out" 2>/dev/null || true
+      else curl -fsS --connect-timeout 4 --max-time 3 -H 'Content-Type: application/octet-stream' --data-binary "@$payload" -w '%{size_upload}\n' "$url" >> "$out" 2>/dev/null || true
+      fi
+    done
+  ) & pids="$pids $!"; i=$((i + 1))
+done
+while [ "$(date +%s)" -lt "$end" ]; do
+  bytes="$(awk '{s+=$1} END{printf "%.0f",s+0}' "$dir"/* 2>/dev/null)"; elapsed=$(( $(date +%s) - start )); [ "$elapsed" -gt 0 ] || elapsed=1
+  rate="$(awk -v b="$bytes" -v s="$elapsed" 'BEGIN{printf "%.2f",b*8/s/1000000}')"
+  printf '{"current_mbps":%s,"average_mbps":%s}\n' "$rate" "$rate" > "$sample"; sleep 1
+done
+wait $pids 2>/dev/null || true
+bytes="$(awk '{s+=$1} END{printf "%.0f",s+0}' "$dir"/* 2>/dev/null)"; elapsed=$(( $(date +%s) - start )); [ "$elapsed" -gt 0 ] || elapsed=1
+awk -v b="$bytes" -v s="$elapsed" 'BEGIN{printf "%.2f\n",b*8/s/1000000}'
