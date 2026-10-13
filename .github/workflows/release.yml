@@ -47,12 +47,6 @@ jobs:
           tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP/zig" --strip-components=1
           echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
 
-      - name: Build native engine for every architecture
-        run: |
-          set -eu
-          zig version
-          sh scripts/build-native.sh "$RUNNER_TEMP/native"
-
       - name: Run tests
         run: |
           set -eu
@@ -66,6 +60,16 @@ jobs:
           cc -std=c99 -Wall -Wextra -Werror -O2 src/transfer.c -o /tmp/yi-transfer-native
           python3 tests/test-transfer.py /tmp/yi-transfer-native
           python3 tests/test-transfer-shell.py root/usr/libexec/yandex-internetometer/transfer
+
+      - name: Build native engine for every architecture
+        run: |
+          set -eu
+          zig version
+          sh scripts/build-native.sh "$RUNNER_TEMP/native"
+
+      - name: Verify architecture-specific packages
+        run: |
+          set -eu
           python3 tests/test-packages.py "$RUNNER_TEMP/native" $(sh scripts/build-native.sh --list)
 
       - name: Prepare package root

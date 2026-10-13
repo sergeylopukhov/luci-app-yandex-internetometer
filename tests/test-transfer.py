@@ -9,7 +9,9 @@ import json
 import os
 import pathlib
 import resource
+import re
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -50,6 +52,11 @@ class Server(http.server.ThreadingHTTPServer):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
+    def setup(self):
+        super().setup()
+        # Headers and the tiny OK body are separate writes in this fixture.
+        # Disable Nagle so Linux delayed ACKs do not add 40 ms to every POST.
+        self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     def log_message(self, *args):
         pass
     def params(self):
@@ -159,9 +166,14 @@ class Tests(unittest.TestCase):
             elapsed = time.monotonic() - started
             rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
             rss_kb = rss // 1024 if sys.platform == 'darwin' else rss
+            if sys.platform == 'linux':
+                # wait4 includes Python's RSS inherited by fork before exec.
+                # VmHWM is the native process's own high-water mark after exec.
+                peak = re.search(r'peak_rss_kb=(\d+)', err)
+                rss_kb = int(peak.group(1)) if peak else None
             result = json.loads(sample.read_text()) if sample.exists() else None
             leftovers = [p.name for p in root.iterdir() if p.name not in ('urls', 'sample')]
-            return proc.returncode, out, err, result, elapsed, rss_kb if rss > before else None, leftovers
+            return proc.returncode, out, err, result, elapsed, rss_kb if sys.platform == 'linux' or rss > before else None, leftovers
 
     def up(self, sid='a', mode='', rate=0, life=0):
         extra = (f'&mode={mode}' if mode else '') + (f'&rate={rate}' if rate else '')
