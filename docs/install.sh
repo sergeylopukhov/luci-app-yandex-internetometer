@@ -34,7 +34,19 @@ if [ -n "$OLD" ] && [ "$OLD" = "$PACKAGE_VERSION" ] && [ "$FORCE" = 0 ]; then sa
 [ -z "$OLD" ] || [ "$FORCE" = 1 ] || awk -v a="$VERSION" -v b="${OLD%-r*}" 'BEGIN{split(a,x,".");split(b,y,".");for(i=1;i<=3;i++){if(x[i]>y[i])exit 0;if(x[i]<y[i])exit 1}exit 0}' || die "отказ от downgrade $OLD → $VERSION; используйте --force"
 [ ! -f /etc/config/yandex-internetometer ] || { BACKUP="/etc/config/yandex-internetometer.backup.$(date +%Y%m%d%H%M%S)"; cp /etc/config/yandex-internetometer "$BACKUP"; chmod 600 "$BACKUP" 2>/dev/null || true; }
 if command -v apk >/dev/null 2>&1; then
- ARCH="$(apk --print-arch 2>/dev/null)" || die 'не удалось определить apk-архитектуру'; say "Найден apk ($ARCH)." "Found apk ($ARCH)."; get "$BASE/keys/yandex-internetometer.rsa.pub" "$TMP/key"; mkdir -p /etc/apk/keys /etc/apk/repositories.d; cmp -s "$TMP/key" /etc/apk/keys/yandex-internetometer.rsa.pub 2>/dev/null || cp "$TMP/key" /etc/apk/keys/yandex-internetometer.rsa.pub; printf '%s\n' "$BASE/packages/$ARCH/yandex-internetometer/packages.adb" > /etc/apk/repositories.d/yandex-internetometer.list; say 'Обновляем список пакетов.' 'Updating package indexes.'; apk update; say "Устанавливаем версию $VERSION." "Installing version $VERSION."; apk add --upgrade "$PKG"
+ ARCH="$(awk 'NF && $1 !~ /^#/ {print $1; exit}' /etc/apk/arch 2>/dev/null || true)"; [ -n "$ARCH" ] || ARCH="$(apk --print-arch 2>/dev/null)"; case "$ARCH" in ''|*[!A-Za-z0-9_.-]*) die 'не удалось определить apk-архитектуру';; esac
+ say "Найден apk ($ARCH)." "Found apk ($ARCH)."; get "$BASE/keys/yandex-internetometer.rsa.pub" "$TMP/key"; mkdir -p /etc/apk/keys /etc/apk/repositories.d; cmp -s "$TMP/key" /etc/apk/keys/yandex-internetometer.rsa.pub 2>/dev/null || cp "$TMP/key" /etc/apk/keys/yandex-internetometer.rsa.pub; printf '%s\n' "$BASE/packages/$ARCH/yandex-internetometer/packages.adb" > /etc/apk/repositories.d/yandex-internetometer.list
+ if apk info -e libc >/dev/null 2>&1 && apk info -e curl >/dev/null 2>&1 && apk info -e jq >/dev/null 2>&1; then
+  printf '%s\n' "$BASE/packages/$ARCH/yandex-internetometer/packages.adb" > "$TMP/repositories"
+  say 'Обновляем репозиторий Интернетометра.' 'Updating the Internetometer repository.'
+  apk --repositories-file "$TMP/repositories" --timeout 15 update
+  say "Устанавливаем версию $VERSION." "Installing version $VERSION."
+  apk --repositories-file "$TMP/repositories" --timeout 15 add --upgrade "$PKG=$PACKAGE_VERSION"
+ else
+  say 'Обновляем список пакетов для установки зависимостей.' 'Updating package indexes for dependencies.'
+  apk --timeout 15 update
+  apk --timeout 15 add --upgrade "$PKG=$PACKAGE_VERSION"
+ fi
 elif command -v opkg >/dev/null 2>&1; then
  ARCH="$(opkg print-architecture 2>/dev/null | awk '$1=="arch" && $2!="all" && $2!="noarch" && $3+0>=best {best=$3+0; arch=$2} END{print arch}')"; [ -n "$ARCH" ] || die 'не удалось определить архитектуру opkg'
  say "Найден opkg ($ARCH)." "Found opkg ($ARCH)."; IPK="$PKG-$VERSION-openwrt-24.10-$ARCH.ipk"; RELEASE="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/$TAG"; get "$RELEASE/SHA256SUMS" "$TMP/SHA256SUMS"; get "$RELEASE/$IPK" "$TMP/$IPK"; expected="$(awk -v f="$IPK" '$2==f || $2=="*"f{print $1}' "$TMP/SHA256SUMS" | head -1)"; [ -n "$expected" ] || die "в выпуске нет пакета для архитектуры $ARCH"; actual="$(sha256sum "$TMP/$IPK" 2>/dev/null | awk '{print $1}')"; [ -n "$expected" ] && [ "$expected" = "$actual" ] || die 'не совпала SHA256-сумма IPK'; opkg install "$TMP/$IPK"
