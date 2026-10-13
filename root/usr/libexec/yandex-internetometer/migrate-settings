@@ -1,0 +1,50 @@
+#!/bin/sh
+# One-time settings migration to the native engine (settings version 2).
+# Called by every install/upgrade path (APK post-install/post-upgrade, IPK postinst,
+# OpenWrt Makefile postinst). Safe to run any number of times:
+#  - previous values are saved to yandex-internetometer.previous before any change;
+#  - settings_version is written only after the new values were committed;
+#  - once settings_version is 2, user changes are never touched again.
+CONFIG="${YANDEX_INTERNETOMETER_CONFIG:-yandex-internetometer}"
+TARGET=2
+command -v uci >/dev/null 2>&1 || exit 0
+
+get() { uci -q get "$CONFIG.main.$1" 2>/dev/null; }
+set_opt() { uci -q set "$CONFIG.main.$1=$2"; }
+
+version="$(get settings_version)"
+case "$version" in ''|*[!0-9]*) version=0;; esac
+[ "$version" -ge "$TARGET" ] && exit 0
+
+uci -q get "$CONFIG.main" >/dev/null 2>&1 || uci -q set "$CONFIG.main=settings" || exit 1
+
+# Keep the first backup: a repeated attempt after a failure must not overwrite it.
+if ! uci -q get "$CONFIG.previous" >/dev/null 2>&1; then
+	uci -q set "$CONFIG.previous=backup" || exit 1
+	uci -q set "$CONFIG.previous.from_settings_version=$version" || exit 1
+	for item in streams upload_streams transfer_protocol download_time upload_time upload_size; do
+		value="$(get "$item")"
+		[ -z "$value" ] || uci -q set "$CONFIG.previous.$item=$value" || exit 1
+	done
+fi
+
+# Performance options move to automatic mode: the engine picks streams from CPU
+# cores and free memory, and HTTP (native engine) whenever the CDN allows it.
+set_opt streams auto || exit 1
+set_opt upload_streams auto || exit 1
+set_opt transfer_protocol auto || exit 1
+# Durations: the old defaults (15/25 s) compensated per-request overhead of the
+# curl engine; 10 s after a 1 s warm-up is stable with the native engine.
+# Durations chosen by the user are kept.
+case "$(get download_time)" in ''|15) set_opt download_time 10 || exit 1;; esac
+case "$(get upload_time)" in ''|25) set_opt upload_time 10 || exit 1;; esac
+[ -n "$(get upload_size)" ] || set_opt upload_size 8000000 || exit 1
+[ -n "$(get upload_enabled)" ] || set_opt upload_enabled 1 || exit 1
+[ -n "$(get latency_samples)" ] || set_opt latency_samples 60 || exit 1
+[ -n "$(get debug)" ] || set_opt debug 0 || exit 1
+uci -q commit "$CONFIG" || exit 1
+
+# The marker is written only after the new values were saved.
+set_opt settings_version "$TARGET" || exit 1
+uci -q commit "$CONFIG" || exit 1
+exit 0

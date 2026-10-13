@@ -1,12 +1,12 @@
 #!/bin/sh
-# luci-app-yandex-internetometer installer 1.1.2
+# luci-app-yandex-internetometer installer 2.0.0
 set -eu
 PKG=luci-app-yandex-internetometer; BASE=https://sergeylopukhov.github.io/luci-app-yandex-internetometer; VERSION_URL=$BASE/version.json; YES=0; FORCE=0
 case "${INSTALLER_LANG:-${LANG:-ru}}" in *ru*|*RU*) RU=1;; *) RU=0;; esac
 say() { [ "$RU" = 1 ] && printf '%s\n' "$1" || printf '%s\n' "$2"; }
 die() { say "Ошибка: $1" "Error: $1" >&2; exit 1; }
 help() { printf '%s\n' "Использование: sh install.sh [--yes] [--force] [--version] [--help]" "--yes: безопасные значения без вопросов; --force: переустановка или downgrade."; }
-while [ "$#" -gt 0 ]; do case "$1" in --yes) YES=1;; --force) FORCE=1;; --version) printf '1.1.2\n'; exit 0;; --help) help; exit 0;; *) die "неизвестный аргумент: $1";; esac; shift; done
+while [ "$#" -gt 0 ]; do case "$1" in --yes) YES=1;; --force) FORCE=1;; --version) printf '2.0.0\n'; exit 0;; --help) help; exit 0;; *) die "неизвестный аргумент: $1";; esac; shift; done
 [ "$(id -u)" = 0 ] || die 'запустите установщик от root'; [ -r /etc/openwrt_release ] || [ -r /etc/os-release ] || die 'нужен OpenWrt'
 command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 || die 'нужен curl или wget с HTTPS'
 TMP="$(mktemp -d /tmp/yandex-internetometer.XXXXXX)" || die 'не удалось создать временный каталог'; trap 'rm -rf "$TMP"' EXIT INT TERM
@@ -36,6 +36,7 @@ if [ -n "$OLD" ] && [ "$OLD" = "$PACKAGE_VERSION" ] && [ "$FORCE" = 0 ]; then sa
 if command -v apk >/dev/null 2>&1; then
  ARCH="$(apk --print-arch 2>/dev/null)" || die 'не удалось определить apk-архитектуру'; say "Найден apk ($ARCH)." "Found apk ($ARCH)."; get "$BASE/keys/yandex-internetometer.rsa.pub" "$TMP/key"; mkdir -p /etc/apk/keys /etc/apk/repositories.d; cmp -s "$TMP/key" /etc/apk/keys/yandex-internetometer.rsa.pub 2>/dev/null || cp "$TMP/key" /etc/apk/keys/yandex-internetometer.rsa.pub; printf '%s\n' "$BASE/packages/$ARCH/yandex-internetometer/packages.adb" > /etc/apk/repositories.d/yandex-internetometer.list; say 'Обновляем список пакетов.' 'Updating package indexes.'; apk update; say "Устанавливаем версию $VERSION." "Installing version $VERSION."; apk add --upgrade "$PKG"
 elif command -v opkg >/dev/null 2>&1; then
- say 'Найден opkg.' 'Found opkg.'; IPK="$PKG-$VERSION-openwrt-24.10-all.ipk"; RELEASE="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/$TAG"; get "$RELEASE/SHA256SUMS" "$TMP/SHA256SUMS"; get "$RELEASE/$IPK" "$TMP/$IPK"; expected="$(awk -v f="$IPK" '$2==f || $2=="*"f{print $1}' "$TMP/SHA256SUMS" | head -1)"; actual="$(sha256sum "$TMP/$IPK" 2>/dev/null | awk '{print $1}')"; [ -n "$expected" ] && [ "$expected" = "$actual" ] || die 'не совпала SHA256-сумма IPK'; opkg install "$TMP/$IPK"
+ ARCH="$(opkg print-architecture 2>/dev/null | awk '$1=="arch" && $2!="all" && $2!="noarch" && $3+0>=best {best=$3+0; arch=$2} END{print arch}')"; [ -n "$ARCH" ] || die 'не удалось определить архитектуру opkg'
+ say "Найден opkg ($ARCH)." "Found opkg ($ARCH)."; IPK="$PKG-$VERSION-openwrt-24.10-$ARCH.ipk"; RELEASE="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/download/$TAG"; get "$RELEASE/SHA256SUMS" "$TMP/SHA256SUMS"; get "$RELEASE/$IPK" "$TMP/$IPK"; expected="$(awk -v f="$IPK" '$2==f || $2=="*"f{print $1}' "$TMP/SHA256SUMS" | head -1)"; [ -n "$expected" ] || die "в выпуске нет пакета для архитектуры $ARCH"; actual="$(sha256sum "$TMP/$IPK" 2>/dev/null | awk '{print $1}')"; [ -n "$expected" ] && [ "$expected" = "$actual" ] || die 'не совпала SHA256-сумма IPK'; opkg install "$TMP/$IPK"
 else die 'не найден apk или opkg'; fi
 refresh_luci; [ -x /usr/bin/yandex-internetometer ] || die 'backend не установлен'; /usr/bin/yandex-internetometer status | jq -e 'type == "object" and (.running == false or .running == true)' >/dev/null 2>&1 || die 'backend status не подтвердил готовность'; ACTUAL="$(installed_version || true)"; [ "$ACTUAL" = "$PACKAGE_VERSION" ] || die "установлена версия ${ACTUAL:-неизвестна}, ожидалась $PACKAGE_VERSION; повторите через несколько минут"; say "Установлена версия $VERSION. LuCI → Статус → Интернетометр." "Installed version $VERSION. LuCI → Status → Internetometer."

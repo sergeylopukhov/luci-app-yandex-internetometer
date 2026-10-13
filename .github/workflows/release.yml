@@ -9,15 +9,15 @@ on:
       release_tag:
         description: Existing immutable tag to publish
         required: true
-        default: v1.1.2
+        default: v2.0.0
 
 permissions:
   contents: write
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PROJECT_VERSION: 1.1.2
-  PKG_VERSION: 1.1.2-r1
+  PROJECT_VERSION: 2.0.0
+  PKG_VERSION: 2.0.0-r1
 
 jobs:
   build:
@@ -32,7 +32,26 @@ jobs:
       - name: Install host tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq wget zstd openssl
+          sudo apt-get install -y jq wget zstd openssl xz-utils
+
+      # The native engine is cross-compiled with zig into static binaries, one per ISA family.
+      - name: Install zig
+        env:
+          ZIG_URL: https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz
+          ZIG_SHA256: 1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026
+        run: |
+          set -eu
+          curl -fL --retry 5 --retry-delay 5 --connect-timeout 30 -o "$RUNNER_TEMP/zig.tar.xz" "$ZIG_URL"
+          printf '%s  %s\n' "$ZIG_SHA256" "$RUNNER_TEMP/zig.tar.xz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/zig"
+          tar -xJf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP/zig" --strip-components=1
+          echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
+
+      - name: Build native engine for every architecture
+        run: |
+          set -eu
+          zig version
+          sh scripts/build-native.sh "$RUNNER_TEMP/native"
 
       - name: Run tests
         run: |
@@ -41,59 +60,28 @@ jobs:
           tests/test-release-metadata.sh
           node tests/test-history-ui.js
           node tests/test-status-ui.js
+          node tests/test-animation-ui.js
           sh tests/test-state.sh
-          sudo apt-get install -y libcurl4-openssl-dev
-          cc -Wall -Wextra -Werror -O2 src/transfer.c -lcurl -o /tmp/yi-transfer-test
-          python3 tests/test-transfer.py /tmp/yi-transfer-test
+          sh tests/test-migration.sh
+          cc -std=c99 -Wall -Wextra -Werror -O2 src/transfer.c -o /tmp/yi-transfer-native
+          python3 tests/test-transfer.py /tmp/yi-transfer-native
           python3 tests/test-transfer-shell.py root/usr/libexec/yandex-internetometer/transfer
+          python3 tests/test-packages.py "$RUNNER_TEMP/native" $(sh scripts/build-native.sh --list)
 
       - name: Prepare package root
         run: |
           set -eu
-          PKGROOT="$RUNNER_TEMP/pkgroot"
-          mkdir -p "$PKGROOT"
-          cp -a root/. "$PKGROOT"/
-          mkdir -p "$PKGROOT/www"
-          cp -a htdocs/. "$PKGROOT/www"/
-          find "$PKGROOT" -name .DS_Store -delete
-          test -x "$PKGROOT/usr/libexec/yandex-internetometer/transfer"
-          mkdir -p "$PKGROOT/usr/lib/lua/luci/i18n"
-          python3 scripts/po2lmo.py \
-            po/ru/yandex-internetometer.po \
-            "$PKGROOT/usr/lib/lua/luci/i18n/yandex-internetometer.ru.lmo"
-          find "$PKGROOT" -type d -print
-          find "$PKGROOT" -type f -print
+          sh scripts/stage-root.sh "$RUNNER_TEMP/pkgroot"
+          find "$RUNNER_TEMP/pkgroot" -type f -print
 
-      - name: Build ipk asset
+      - name: Build ipk assets
         run: |
           set -eu
-          WORK="$RUNNER_TEMP/ipk"
-          PKGROOT="$RUNNER_TEMP/pkgroot"
-          mkdir -p "$WORK/control" "$GITHUB_WORKSPACE/dist"
-          cat > "$WORK/control/control" <<EOF
-          Package: $PKG_NAME
-          Version: $PKG_VERSION
-          Depends: curl, jq
-          Source: https://github.com/sergeylopukhov/luci-app-yandex-internetometer
-          SourceName: $PKG_NAME
-          License: MIT
-          Section: luci
-          URL: https://github.com/sergeylopukhov/luci-app-yandex-internetometer
-          Maintainer: Sergey Lopukhov <sergey.lopukhov@gmail.com>
-          Architecture: all
-          Description:  LuCI app for unofficial Yandex Internetometer-compatible speed tests
-          EOF
-          cat > "$WORK/control/conffiles" <<EOF
-          /etc/config/yandex-internetometer
-          EOF
-          install -m 0755 scripts/post-install "$WORK/control/postinst"
-          install -m 0755 scripts/post-deinstall "$WORK/control/postrm"
-          printf '2.0\n' > "$WORK/debian-binary"
-          tar --numeric-owner --owner=0 --group=0 -czf "$WORK/data.tar.gz" -C "$PKGROOT" .
-          tar --numeric-owner --owner=0 --group=0 -czf "$WORK/control.tar.gz" -C "$WORK/control" .
-          tar --numeric-owner --owner=0 --group=0 -czf \
-            "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-24.10-all.ipk" \
-            -C "$WORK" ./debian-binary ./data.tar.gz ./control.tar.gz
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          for arch in $(sh scripts/build-native.sh --list); do
+            sh scripts/build-ipk.sh "$RUNNER_TEMP/pkgroot" "$RUNNER_TEMP/native" "$arch" "$PKG_VERSION" \
+              "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-24.10-$arch.ipk"
+          done
 
       - name: Download apk-capable OpenWrt SDK
         run: |
@@ -121,59 +109,19 @@ jobs:
           test -n "${APK_PRIVATE_KEY:-}" || { echo 'YANDEX_INTERNETOMETER_APK_PRIVATE_KEY is required' >&2; exit 1; }
           printf '%s\n' "$APK_PRIVATE_KEY" > "$SDK/private-key.pem"
           openssl ec -in "$SDK/private-key.pem" -pubout -out "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub"
-          ARCHES="
-          aarch64
-          aarch64_cortex-a53
-          aarch64_cortex-a72
-          aarch64_cortex-a76
-          aarch64_generic
-          armhf
-          armv7
-          arm_arm1176jzf-s_vfp
-          arm_arm926ej-s
-          arm_cortex-a15_neon-vfpv4
-          arm_cortex-a5_vfpv4
-          arm_cortex-a7
-          arm_cortex-a7_neon-vfpv4
-          arm_cortex-a7_vfpv4
-          arm_cortex-a8_vfpv3
-          arm_cortex-a9
-          arm_cortex-a9_neon
-          arm_cortex-a9_vfpv3-d16
-          arm_fa526
-          arm_xscale
-          armeb_xscale
-          x86
-          i386_pentium-mmx
-          i386_pentium4
-          mips
-          mipsel
-          mips64
-          mips64el
-          mips64_mips64r2
-          mips64_octeonplus
-          mips64el_mips64r2
-          mips_24kc
-          mips_4kec
-          mips_mips32
-          mipsel_24kc
-          mipsel_24kc_24kf
-          mipsel_74kc
-          mipsel_mips32
-          powerpc64_e5500
-          powerpc_464fp
-          powerpc_8548
-          ppc64le
-          riscv64
-          riscv64_generic
-          riscv64_riscv64
-          x86_64
-          "
+          ARCHES="$(sh scripts/build-native.sh --list)"
           for arch in $ARCHES; do
+            # Each architecture gets its own root: the shared files plus its native engine.
+            ARCHROOT="$RUNNER_TEMP/apkroot-$arch"
+            mkdir -p "$ARCHROOT"
+            cp -a "$PKGROOT/." "$ARCHROOT/"
+            if [ -f "$RUNNER_TEMP/native/$arch/transfer-native" ]; then
+              install -m 0755 "$RUNNER_TEMP/native/$arch/transfer-native" "$ARCHROOT/usr/libexec/yandex-internetometer/transfer-native"
+            fi
             "$SDK/staging_dir/host/bin/apk" mkpkg \
               --info "name:$PKG_NAME" \
               --info "version:$PKG_VERSION" \
-              --info "arch:noarch" \
+              --info "arch:$arch" \
               --info "license:MIT" \
               --info "origin:$PKG_NAME" \
               --info "url:https://github.com/sergeylopukhov/luci-app-yandex-internetometer" \
@@ -183,7 +131,7 @@ jobs:
               --script "post-install:$GITHUB_WORKSPACE/scripts/post-install" \
               --script "post-upgrade:$GITHUB_WORKSPACE/scripts/post-install" \
               --script "post-deinstall:$GITHUB_WORKSPACE/scripts/post-deinstall" \
-              --files "$PKGROOT" \
+              --files "$ARCHROOT" \
               --output "$GITHUB_WORKSPACE/dist/luci-app-yandex-internetometer-${PROJECT_VERSION}-openwrt-snapshot-$arch.apk"
           done
 
@@ -237,6 +185,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Download built packages
         uses: actions/download-artifact@v4
@@ -256,9 +206,15 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
+          awk -v version="$PROJECT_VERSION" '
+            $0 == "## Версия " version { current=1; next }
+            current && /^## Версия / { exit }
+            current { print }
+          ' RELEASE_NOTES.md > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md"
           gh release create "$TAG" dist/* \
               --title "Яндекс Интернетометр ${PROJECT_VERSION}" \
-              --notes-file RELEASE_NOTES.md \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
               --latest
           fi
 

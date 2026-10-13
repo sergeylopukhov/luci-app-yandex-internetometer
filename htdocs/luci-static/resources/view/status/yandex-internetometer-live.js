@@ -58,9 +58,11 @@ var translations = {
 		'Writes additional troubleshooting messages to /var/run/yandex-internetometer/debug.log. Enable it only while diagnosing a problem; the log is removed after reboot.': 'Записывает дополнительные сведения в /var/run/yandex-internetometer/debug.log. Включайте только для поиска неполадок: после перезагрузки журнал удаляется.',
 		'Download': 'Скачивание',
 		'Download duration': 'Длительность входящего теста',
-		'Automatic mode selects the stream count using available memory, CPU cores and system load.': 'Параллельные запросы на скачивание. Шесть потоков используются по умолчанию для более полной загрузки канала.',
+		'Automatic mode selects the stream count using available memory, CPU cores and system load.': '«Авто» подбирает число потоков с учётом ресурсов роутера.',
 		'Download speed': 'Входящая скорость',
 		'Average download': 'Средняя входящая',
+		'Period average': 'Среднее за период',
+		'Best result': 'Лучший результат',
 		'Average upload': 'Средняя исходящая',
 		'Average ping': 'Средний пинг',
 		'Clear history': 'Очистить историю',
@@ -217,49 +219,81 @@ function metricFloat(value) {
 	return isNaN(number) ? null : number;
 }
 
-function easeInOutSine(value) {
-	return 1 - Math.pow(1 - value, 3);
+// Live values arrive about once a second with uneven RPC latency. Instead of restarting
+// a timed tween on every poll, each value follows its latest target continuously:
+// exponential smoothing on real frame time, so the motion never stops and restarts.
+function reducedMotion() {
+	return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
 
-function animateValue(key, target, duration, onFrame) {
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) duration = 0;
-	var start = metricDisplayValue[key];
-	var startedAt = Date.now();
+function animateValue(key, target, tau, onFrame, from) {
+	var state = metricSmoothedValue[key] || (metricSmoothedValue[key] = { target: null, last: 0 });
 
+	state.onFrame = onFrame;
 	if (target === null || target === undefined || isNaN(target)) {
 		if (metricAnimationFrame[key])
 			window.cancelAnimationFrame(metricAnimationFrame[key]);
 		metricAnimationFrame[key] = null;
 		metricDisplayValue[key] = null;
+		state.target = null;
 		onFrame(null);
 		return;
 	}
 
-	if (start === null || start === undefined || isNaN(start))
-		start = target;
-	if (metricAnimationFrame[key])
-		window.cancelAnimationFrame(metricAnimationFrame[key]);
-	metricAnimationFrame[key] = null;
-	if (duration <= 0) {
+	state.target = target;
+	if (metricDisplayValue[key] === null || metricDisplayValue[key] === undefined || isNaN(metricDisplayValue[key]))
+		metricDisplayValue[key] = from === undefined ? target : from;
+	// Hidden tabs get no animation frames: show the target at once instead of a stale value.
+	if (tau <= 0 || reducedMotion() || (typeof document !== 'undefined' && document.hidden)) {
+		if (metricAnimationFrame[key])
+			window.cancelAnimationFrame(metricAnimationFrame[key]);
+		metricAnimationFrame[key] = null;
 		metricDisplayValue[key] = target;
-		onFrame(target);
+		onFrame(target, true);
 		return;
 	}
-	function frame() {
-		var elapsed = Date.now() - startedAt;
-		var progress = Math.min(1, elapsed / duration);
-		var value = start + (target - start) * easeInOutSine(progress);
+	state.tau = tau;
+	if (metricAnimationFrame[key])
+		return;
+	onFrame(metricDisplayValue[key], false);
+	// requestAnimationFrame timestamps share this clock, so the first step is real time too.
+	state.last = window.performance && window.performance.now ? window.performance.now() : 0;
 
+	function frame(now) {
+		// Real elapsed time, unclamped: at low frame rates the value must still keep up
+		// with the clock (exponential smoothing is stable for any step).
+		var dt = state.last ? Math.max(0, (now - state.last) / 1000) : 1 / 60;
+		var value = metricDisplayValue[key];
+		var gap = state.target - value;
+		var settled;
+
+		state.last = now;
+		value += gap * (1 - Math.exp(-dt / state.tau));
+		settled = Math.abs(state.target - value) <= Math.max(0.005, Math.abs(state.target) * 0.0002);
+		if (settled)
+			value = state.target;
 		metricDisplayValue[key] = value;
-		onFrame(value);
-
-		if (progress < 1)
-			metricAnimationFrame[key] = window.requestAnimationFrame(frame);
-		else
+		state.onFrame(value, settled);
+		if (settled) {
 			metricAnimationFrame[key] = null;
+			state.last = 0;
+		}
+		else
+			metricAnimationFrame[key] = window.requestAnimationFrame(frame);
 	}
 
-	frame();
+	metricAnimationFrame[key] = window.requestAnimationFrame(frame);
+}
+
+// While a value is moving, hundredths only flicker: show fewer digits until it settles.
+function metricLiveNumber(value) {
+	if (value === null || isNaN(value))
+		return '--';
+	if (value >= 100)
+		return value.toFixed(0);
+	if (value >= 10)
+		return value.toFixed(1);
+	return value.toFixed(2);
 }
 
 function hasResult(data) {
@@ -376,100 +410,131 @@ function smoothPath(pointList) {
 	return d;
 }
 
+// "Mirror ribbon": every measurement is one capsule pair growing from a shared axis,
+// incoming upwards and outgoing downwards, so both directions and their balance read
+// at a glance. Dashed lines mark each period average; the best results are tagged.
 function historyChart(records) {
-	var width = 900, height = 280, padLeft = 44, padRight = 12, padTop = 16, padBottom = 32;
-	var plotWidth = width - padLeft - padRight, plotHeight = height - padTop - padBottom, baseline = height - padBottom;
+	var width = 900, height = 300, padLeft = 52, padRight = 18, padTop = 22, padBottom = 30;
+	var plotWidth = width - padLeft - padRight, axisY = padTop + (height - padTop - padBottom) / 2;
+	var half = (height - padTop - padBottom) / 2 - 8;
+	var count = records.length, barWidth = Math.max(3, Math.min(14, plotWidth / Math.max(count, 1) * 0.55));
+	var inset = count === 1 ? 0 : barWidth;
 	var values = [];
 	records.forEach(function(record) {
 		var download = historyNumber(record.download_mbps), upload = historyNumber(record.upload_mbps);
 		if (download !== null) values.push(download);
 		if (upload !== null) values.push(upload);
 	});
-	var bounds = niceTicks(Math.max.apply(Math, values.concat([1])), 4);
+	var bounds = niceTicks(Math.max.apply(Math, values.concat([1])), 2);
 
 	function pointX(index) {
-		return records.length === 1 ? padLeft + plotWidth / 2 : padLeft + index * plotWidth / (records.length - 1);
+		return count === 1 ? padLeft + plotWidth / 2 : padLeft + inset + index * (plotWidth - 2 * inset) / (count - 1);
 	}
-	function pointY(value) {
-		return padTop + (1 - value / bounds.max) * plotHeight;
+	function lift(value) {
+		return value / bounds.max * half;
 	}
-	function series(key) {
+	function series(key, direction) {
 		var flat = records.map(function(record, index) {
 			var value = historyNumber(record[key]);
-			return value === null ? null : { x: pointX(index), y: pointY(value), value: value };
+			return value === null ? null : { x: pointX(index), y: axisY - direction * lift(value), value: value, index: index };
 		});
-		var segments = [], run = [];
+		var segments = [], run = [], best = null;
 		flat.forEach(function(point) {
-			if (point) run.push(point);
+			if (point) { run.push(point); if (!best || point.value > best.value) best = point; }
 			else if (run.length) { segments.push(run); run = []; }
 		});
 		if (run.length) segments.push(run);
-		return { flat: flat, segments: segments };
+		return { flat: flat, segments: segments, best: best, average: historyAverage(records, key), direction: direction };
 	}
 
-	var download = series('download_mbps'), upload = series('upload_mbps');
+	var download = series('download_mbps', 1), upload = series('upload_mbps', -1);
 
-	function seriesNodes(seriesData, cssClass, gradientId) {
+	function seriesNodes(data, cssClass, gradientId) {
 		var nodes = [];
-		seriesData.segments.forEach(function(segment) {
-			if (segment.length > 1) {
-				var line = smoothPath(segment);
-				var area = line + ' L' + segment[segment.length - 1].x.toFixed(1) + ',' + baseline.toFixed(1) +
-					' L' + segment[0].x.toFixed(1) + ',' + baseline.toFixed(1) + ' Z';
-				nodes.push(svgNode('path', { d: area, 'class': 'yandex-internetometer-chart-area', fill: 'url(#' + gradientId + ')' }));
-				nodes.push(svgNode('path', { d: line, 'class': 'yandex-internetometer-chart-line ' + cssClass }));
-			}
+		data.flat.forEach(function(point) {
+			if (!point) return;
+			nodes.push(svgNode('line', {
+				x1: point.x.toFixed(1), y1: (axisY - data.direction * 2).toFixed(1), x2: point.x.toFixed(1), y2: point.y.toFixed(1),
+				stroke: 'url(#' + gradientId + ')',
+				'class': 'yandex-internetometer-chart-bar ' + cssClass,
+				style: 'stroke-width:' + barWidth.toFixed(1) + ';animation-delay:' + Math.min(point.index * 14, 520) + 'ms'
+			}));
 		});
-		seriesData.flat.forEach(function(point) {
-			if (point) nodes.push(svgNode('circle', { cx: point.x, cy: point.y, r: 2.6, 'class': 'yandex-internetometer-chart-point ' + cssClass }));
+		data.segments.forEach(function(segment) {
+			if (segment.length > 1)
+				nodes.push(svgNode('path', { d: smoothPath(segment), 'vector-effect': 'non-scaling-stroke', 'class': 'yandex-internetometer-chart-line ' + cssClass }));
 		});
+		data.flat.forEach(function(point) {
+			if (point) nodes.push(svgNode('circle', { cx: point.x.toFixed(1), cy: point.y.toFixed(1), r: 2.6, 'class': 'yandex-internetometer-chart-point ' + cssClass }));
+		});
+		if (data.average !== null) {
+			var y = axisY - data.direction * lift(data.average);
+			nodes.push(svgNode('line', { x1: padLeft, y1: y.toFixed(1), x2: width - padRight, y2: y.toFixed(1), 'vector-effect': 'non-scaling-stroke', 'class': 'yandex-internetometer-chart-average ' + cssClass }));
+			nodes.push(svgNode('text', { x: width - padRight, y: (y - data.direction * 6).toFixed(1), 'text-anchor': 'end', 'dominant-baseline': data.direction > 0 ? 'auto' : 'hanging', 'class': 'yandex-internetometer-chart-average-label ' + cssClass },
+				'⌀ ' + data.average.toFixed(0)));
+		}
+		if (data.best && count > 1) {
+			var flip = data.best.x > width - padRight - 70;
+			nodes.push(svgNode('circle', { cx: data.best.x.toFixed(1), cy: data.best.y.toFixed(1), r: 5.5, 'class': 'yandex-internetometer-chart-peak ' + cssClass }));
+			nodes.push(svgNode('text', {
+				x: (data.best.x + (flip ? -10 : 10)).toFixed(1), y: data.best.y.toFixed(1),
+				'text-anchor': flip ? 'end' : 'start', 'dominant-baseline': 'middle', 'class': 'yandex-internetometer-chart-peak-label ' + cssClass
+			}, '★ ' + data.best.value.toFixed(0)));
+		}
 		return nodes;
 	}
 
-	var gridNodes = bounds.ticks.map(function(tick) {
-		var y = pointY(tick);
-		return svgNode('g', { 'class': 'yandex-internetometer-chart-gridline' }, [
-			svgNode('line', { x1: padLeft, y1: y.toFixed(1), x2: width - padRight, y2: y.toFixed(1) }),
-			svgNode('text', { x: padLeft - 8, y: y.toFixed(1), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, formatTick(tick))
-		]);
+	var gridNodes = [svgNode('line', { x1: padLeft, y1: axisY.toFixed(1), x2: width - padRight, y2: axisY.toFixed(1), 'vector-effect': 'non-scaling-stroke', 'class': 'yandex-internetometer-chart-axis' })];
+	bounds.ticks.forEach(function(tick) {
+		if (!tick) return;
+		[1, -1].forEach(function(direction) {
+			var y = axisY - direction * lift(tick);
+			gridNodes.push(svgNode('g', { 'class': 'yandex-internetometer-chart-gridline' }, [
+				svgNode('line', { x1: padLeft, y1: y.toFixed(1), x2: width - padRight, y2: y.toFixed(1), 'vector-effect': 'non-scaling-stroke' }),
+				svgNode('text', { x: padLeft - 8, y: y.toFixed(1), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, formatTick(tick))
+			]));
+		});
 	});
+	gridNodes.push(svgNode('text', { x: padLeft - 8, y: (axisY - 7).toFixed(1), 'text-anchor': 'end', 'class': 'yandex-internetometer-chart-direction is-download' }, '↓'));
+	gridNodes.push(svgNode('text', { x: padLeft - 8, y: (axisY + 7).toFixed(1), 'text-anchor': 'end', 'dominant-baseline': 'hanging', 'class': 'yandex-internetometer-chart-direction is-upload' }, '↑'));
 
 	var dateNodes = (function() {
-		if (!records.length) return [];
-		var count = Math.min(4, records.length);
-		if (count < 2)
-			return [svgNode('text', { x: pointX(0), y: baseline + 22, 'text-anchor': 'middle', 'class': 'yandex-internetometer-chart-axis-label' }, formatAxisDate(records[0].timestamp))];
+		if (!count) return [];
+		var labels = Math.min(4, count);
+		if (labels < 2)
+			return [svgNode('text', { x: pointX(0), y: height - 8, 'text-anchor': 'middle', 'class': 'yandex-internetometer-chart-axis-label' }, formatAxisDate(records[0].timestamp))];
 		var seen = {}, nodes = [];
-		for (var i = 0; i < count; i++) {
-			var index = Math.round(i * (records.length - 1) / (count - 1));
+		for (var i = 0; i < labels; i++) {
+			var index = Math.round(i * (count - 1) / (labels - 1));
 			if (seen[index]) continue;
 			seen[index] = true;
-			var anchor = i === 0 ? 'start' : i === count - 1 ? 'end' : 'middle';
-			nodes.push(svgNode('text', { x: pointX(index), y: baseline + 22, 'text-anchor': anchor, 'class': 'yandex-internetometer-chart-axis-label' }, formatAxisDate(records[index].timestamp)));
+			var anchor = i === 0 ? 'start' : i === labels - 1 ? 'end' : 'middle';
+			nodes.push(svgNode('text', { x: pointX(index), y: height - 8, 'text-anchor': anchor, 'class': 'yandex-internetometer-chart-axis-label' }, formatAxisDate(records[index].timestamp)));
 		}
 		return nodes;
 	})();
 
+	function ribbonGradient(id, toY) {
+		return svgNode('linearGradient', { id: id, gradientUnits: 'userSpaceOnUse', x1: 0, y1: axisY.toFixed(1), x2: 0, y2: toY.toFixed(1) }, [
+			svgNode('stop', { offset: '0%', 'class': 'yandex-internetometer-chart-stop-base' }),
+			svgNode('stop', { offset: '100%', 'class': 'yandex-internetometer-chart-stop-tip' })
+		]);
+	}
 	var defs = svgNode('defs', {}, [
-		svgNode('linearGradient', { id: 'yiChartDownloadFill', x1: 0, y1: 0, x2: 0, y2: 1 }, [
-			svgNode('stop', { offset: '0%', style: 'stop-color:var(--yi-red);stop-opacity:.22' }),
-			svgNode('stop', { offset: '100%', style: 'stop-color:var(--yi-red);stop-opacity:0' })
-		]),
-		svgNode('linearGradient', { id: 'yiChartUploadFill', x1: 0, y1: 0, x2: 0, y2: 1 }, [
-			svgNode('stop', { offset: '0%', style: 'stop-color:var(--yi-green);stop-opacity:.22' }),
-			svgNode('stop', { offset: '100%', style: 'stop-color:var(--yi-green);stop-opacity:0' })
-		])
+		ribbonGradient('yiChartDownloadFill', axisY - half),
+		ribbonGradient('yiChartUploadFill', axisY + half)
 	]);
 
-	var cursorLine = svgNode('line', { 'class': 'yandex-internetometer-chart-cursor-line', x1: 0, y1: padTop, x2: 0, y2: baseline, opacity: 0 });
+	var cursorLine = svgNode('line', { 'class': 'yandex-internetometer-chart-cursor-line', x1: 0, y1: padTop, x2: 0, y2: height - padBottom, 'vector-effect': 'non-scaling-stroke', opacity: 0 });
 	var cursorDownload = svgNode('circle', { 'class': 'yandex-internetometer-chart-cursor-point is-download', r: 4.5, opacity: 0 });
 	var cursorUpload = svgNode('circle', { 'class': 'yandex-internetometer-chart-cursor-point is-upload', r: 4.5, opacity: 0 });
 	var tooltipDate = svgNode('text', { 'class': 'yandex-internetometer-chart-tooltip-date', x: 10, y: 18 }, '');
 	var tooltipDownload = svgNode('text', { 'class': 'yandex-internetometer-chart-tooltip-download', x: 10, y: 35 }, '');
 	var tooltipUpload = svgNode('text', { 'class': 'yandex-internetometer-chart-tooltip-upload', x: 10, y: 50 }, '');
+	var tooltipPing = svgNode('text', { 'class': 'yandex-internetometer-chart-tooltip-date', x: 10, y: 65 }, '');
 	var tooltipGroup = svgNode('g', { 'class': 'yandex-internetometer-chart-tooltip', opacity: 0 }, [
-		svgNode('rect', { rx: 6, ry: 6, width: 122, height: 58 }),
-		tooltipDate, tooltipDownload, tooltipUpload
+		svgNode('rect', { rx: 8, ry: 8, width: 132, height: 74 }),
+		tooltipDate, tooltipDownload, tooltipUpload, tooltipPing
 	]);
 	var overlay = svgNode('rect', { 'class': 'yandex-internetometer-chart-overlay', x: padLeft, y: 0, width: Math.max(plotWidth, 1), height: height, fill: 'transparent' });
 
@@ -478,20 +543,21 @@ function historyChart(records) {
 			[cursorLine, cursorDownload, cursorUpload, tooltipGroup, overlay]));
 
 	function showCursor(index) {
-		index = Math.max(0, Math.min(records.length - 1, index));
-		var record = records[index], downloadPoint = download.flat[index], uploadPoint = upload.flat[index];
+		index = Math.max(0, Math.min(count - 1, index));
+		var record = records[index], downloadPoint = download.flat[index], uploadPoint = upload.flat[index], ping = historyNumber(record.ping_ms);
 		var x = pointX(index);
 		cursorLine.setAttribute('x1', x.toFixed(1)); cursorLine.setAttribute('x2', x.toFixed(1)); cursorLine.setAttribute('opacity', 1);
 		if (downloadPoint) { cursorDownload.setAttribute('cx', downloadPoint.x.toFixed(1)); cursorDownload.setAttribute('cy', downloadPoint.y.toFixed(1)); cursorDownload.setAttribute('opacity', 1); }
 		else cursorDownload.setAttribute('opacity', 0);
 		if (uploadPoint) { cursorUpload.setAttribute('cx', uploadPoint.x.toFixed(1)); cursorUpload.setAttribute('cy', uploadPoint.y.toFixed(1)); cursorUpload.setAttribute('opacity', 1); }
 		else cursorUpload.setAttribute('opacity', 0);
-		var tooltipX = x + 12; if (tooltipX + 122 > width - padRight) tooltipX = x - 134;
-		tooltipGroup.setAttribute('transform', 'translate(' + tooltipX.toFixed(1) + ',' + padTop.toFixed(1) + ')');
+		var tooltipX = x + 14; if (tooltipX + 132 > width - padRight) tooltipX = x - 146;
+		tooltipGroup.setAttribute('transform', 'translate(' + tooltipX.toFixed(1) + ',' + (axisY - 37).toFixed(1) + ')');
 		tooltipGroup.setAttribute('opacity', 1);
 		tooltipDate.textContent = new Date(record.timestamp).toLocaleString(appLanguage === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 		tooltipDownload.textContent = '↓ ' + (downloadPoint ? downloadPoint.value.toFixed(1) : '—') + ' ' + T('Mbps');
 		tooltipUpload.textContent = '↑ ' + (uploadPoint ? uploadPoint.value.toFixed(1) : '—') + ' ' + T('Mbps');
+		tooltipPing.textContent = T('Ping') + ' ' + (ping === null ? '—' : ping.toFixed(1)) + ' ' + T('ms');
 	}
 	function hideCursor() {
 		cursorLine.setAttribute('opacity', 0); cursorDownload.setAttribute('opacity', 0); cursorUpload.setAttribute('opacity', 0); tooltipGroup.setAttribute('opacity', 0);
@@ -500,7 +566,7 @@ function historyChart(records) {
 		var point = svg.createSVGPoint();
 		point.x = ev.clientX; point.y = ev.clientY;
 		var loc = point.matrixTransform(svg.getScreenCTM().inverse());
-		return Math.round((loc.x - padLeft) / (plotWidth / Math.max(records.length - 1, 1)));
+		return count === 1 ? 0 : Math.round((loc.x - padLeft - inset) / ((plotWidth - 2 * inset) / (count - 1)));
 	}
 	overlay.addEventListener('pointermove', function(ev) { showCursor(indexFromEvent(ev)); });
 	overlay.addEventListener('pointerdown', function(ev) { showCursor(indexFromEvent(ev)); });
@@ -510,7 +576,9 @@ function historyChart(records) {
 		svg,
 		E('div', { 'class': 'yandex-internetometer-chart-legend' }, [
 			E('span', { 'class': 'is-download' }, T('Incoming')),
-			E('span', { 'class': 'is-upload' }, T('Outgoing'))
+			E('span', { 'class': 'is-upload' }, T('Outgoing')),
+			E('span', { 'class': 'is-average' }, '⌀ ' + T('Period average')),
+			E('span', { 'class': 'is-peak' }, '★ ' + T('Best result'))
 		])
 	]);
 }
@@ -1072,10 +1140,11 @@ function updateSpeedometerTicks(node, data) {
 
 	progress = Math.max(0, Math.min(100, gaugeProgress(data)));
 	progressPath = svg.querySelector('.yandex-internetometer-progress-path');
+	// Same time constant as the numbers, so the dial and the value move together.
 	if (progressPath)
-		animateValue('progress', progress, 450, function(value) {
+		animateValue('progress', progress, data && data.running ? 0.6 : 0.3, function(value) {
 			progressPath.setAttribute('style', 'stroke-dasharray:%s 100'.format(value === null ? 0 : value.toFixed(2)));
-		});
+		}, 0);
 }
 
 
@@ -1098,9 +1167,13 @@ function updateMetricNode(node, selector, key, value, active, running) {
 		}
 		else {
 			displayTarget = target;
-			animateValue(key, displayTarget, 0, function(displayValue) {
-				valueNode.textContent = metricNumber(displayValue);
-			});
+			// Speeds rise from zero and glide between samples and are shown in whole megabits;
+			// a settled ping shows full precision.
+			animateValue(key, displayTarget, key === 'ping' ? 0.25 : (running ? 0.6 : 0.3), function(displayValue, settled) {
+				var text = key !== 'ping' ? displayValue.toFixed(0) : (settled && !running ? metricNumber(displayValue) : metricLiveNumber(displayValue));
+				if (valueNode.textContent !== text)
+					valueNode.textContent = text;
+			}, key === 'ping' ? undefined : 0);
 		}
 	}
 
@@ -1250,13 +1323,13 @@ return view.extend({
 
 		o = s.option(form.Value, 'download_time', T('Download duration'));
 		o.datatype = 'range(1, 60)';
-		o.default = '15';
+		o.default = '10';
 		o.rmempty = false;
 		o.description = T('Seconds.');
 
 		o = s.option(form.Value, 'upload_time', T('Upload duration'));
 		o.datatype = 'range(1, 60)';
-		o.default = '25';
+		o.default = '10';
 		o.rmempty = false;
 		o.description = T('Seconds.');
 
@@ -1297,7 +1370,7 @@ return view.extend({
 					'.yandex-internetometer-brandline{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;color:var(--yi-muted);font-size:13px}',
 					'.yandex-internetometer-brandline strong{font-size:16px;color:var(--yi-text);font-weight:700}',
 					'.yandex-internetometer-brandline span{text-align:right;overflow-wrap:anywhere}',
-					'.yandex-internetometer-oval{position:relative;width:min(957px,100%);aspect-ratio:957/392;margin:0 auto;display:grid;place-items:center}',
+					'.yandex-internetometer-oval{position:relative;container-type:inline-size;width:min(957px,100%);aspect-ratio:957/392;margin:0 auto;display:grid;place-items:center}',
 					'.yandex-internetometer-speedometer-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}',
 					'.yandex-internetometer-speedometer-reference{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain}',
 					'.yandex-internetometer-progress-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}',
@@ -1316,7 +1389,7 @@ return view.extend({
 					'.yandex-internetometer-speed-label{display:flex;align-items:center;justify-content:center;gap:6px;font-size:17px;line-height:1.2;color:var(--yi-text);font-weight:500;white-space:nowrap}',
 					'.yandex-internetometer-speed-label b{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;background:var(--yi-text);color:var(--yi-bg);font-size:10px;line-height:1;font-weight:800}',
 					'.yandex-internetometer-speed-label b:empty{display:none}',
-					'.yandex-internetometer-speed-value{font-size:64px;line-height:1;font-weight:400;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin:8px 0;transition:opacity .2s cubic-bezier(.22,1,.36,1)}',
+					'.yandex-internetometer-speed-value{font-size:46px;font-size:clamp(26px,5.6cqi,46px);line-height:1;font-weight:400;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin:8px 0;transition:opacity .2s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-hero.is-running .yandex-internetometer-speed-value{color:var(--yi-red)}',
 					'.yandex-internetometer-speed-unit{font-size:17px;line-height:1.2;font-weight:500;color:var(--yi-text)}',
 					'.yandex-internetometer-session-row{display:flex;align-items:center;justify-content:center;gap:16px;min-height:36px;color:var(--yi-text);font-size:16px;line-height:1.2;flex-wrap:wrap}',
@@ -1338,21 +1411,26 @@ return view.extend({
 					'.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:0}',
 					'.yandex-internetometer-detail-row span{font-size:12px;color:var(--yi-muted);white-space:nowrap}',
 					'.yandex-internetometer-detail-row strong{font-size:13px;color:var(--yi-text);font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}',
-					'.yandex-internetometer-update{display:flex;flex-wrap:wrap;align-items:center;gap:9px 12px;margin:0 0 14px;padding:12px 14px;border:1px solid #f1b4a8;border-radius:10px;background:#fff4f0;color:#38251f;font-size:14px;line-height:1.4}',
+					'.yandex-internetometer-update{display:flex;flex-wrap:wrap;align-items:center;gap:9px 12px;min-width:0;max-width:100%;box-sizing:border-box;margin:0 0 14px;padding:12px 14px;border:1px solid #f1b4a8;border-radius:10px;background:#fff4f0;color:#38251f;font-size:14px;line-height:1.4}',
 					'.yandex-internetometer-update strong{color:#9d2e1e}',
 					'.yandex-internetometer-update a{color:#9d2e1e;font-weight:700}',
-					'.yandex-internetometer-update-command{flex:1 0 100%;display:grid;gap:5px;margin-top:2px;color:#514841;font-size:12px}',
-					'.yandex-internetometer-update-command-row{display:flex;align-items:stretch;gap:8px}.yandex-internetometer-update-command code{display:block;flex:1 1 auto;min-width:0;max-width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e3cfc9;border-radius:7px;background:#fff;color:#252528;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:nowrap}.yandex-internetometer-update-command-row .btn{flex:0 0 auto;border:1px solid #d59e92;border-radius:7px;background:#fff;color:#762b20;font-weight:700;cursor:pointer}.yandex-internetometer-update.is-current{border-color:#a9d8c0;background:#f1fbf5;color:#214d35}.yandex-internetometer-update.is-current strong{color:#167548}',
+					'.yandex-internetometer-update-command{flex:1 1 100%;min-width:0;max-width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin-top:2px;color:#514841;font-size:12px}',
+					'.yandex-internetometer-update-command-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;min-width:0}.yandex-internetometer-update-command code{display:block;flex:1 1 16rem;min-width:0;max-width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e3cfc9;border-radius:7px;background:#fff;color:#252528;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:nowrap}.yandex-internetometer-update-command-row .btn{flex:0 0 auto;max-width:100%;white-space:normal;border:1px solid #d59e92;border-radius:7px;background:#fff;color:#762b20;font-weight:700;cursor:pointer}.yandex-internetometer-update.is-current{border-color:#a9d8c0;background:#f1fbf5;color:#214d35}.yandex-internetometer-update.is-current strong{color:#167548}',
 					'.yandex-internetometer-history{margin:18px 0 0;padding:20px;border:1px solid var(--yi-border);border-radius:12px;background:var(--yi-bg);color:var(--yi-text)}',
 					'.yandex-internetometer-history-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}.yandex-internetometer-history-head h3{margin:0 0 3px;font-size:20px}.yandex-internetometer-history-head span{color:var(--yi-muted);font-size:13px}.yandex-internetometer-history-head select{min-height:38px;padding:7px 34px 7px 11px;border:1px solid var(--yi-border);border-radius:8px;background:var(--yi-panel);color:var(--yi-text)}',
-					'.yandex-internetometer-chart{padding:14px 0 4px;border:1px solid var(--yi-border);border-radius:10px;background:var(--yi-panel)}.yandex-internetometer-chart svg{display:block;width:100%;height:255px;touch-action:none}',
+					'.yandex-internetometer-chart{padding:14px 0 4px;border:1px solid var(--yi-border);border-radius:10px;background:var(--yi-panel)}.yandex-internetometer-chart svg{display:block;width:100%;height:280px;touch-action:none}',
 					'.yandex-internetometer-chart-gridline line{stroke:var(--yi-border);stroke-width:1;stroke-dasharray:3 4}.yandex-internetometer-chart-gridline text{fill:var(--yi-muted);font-size:11px;font-variant-numeric:tabular-nums}',
 					'.yandex-internetometer-chart-axis-label{fill:var(--yi-muted);font-size:11px}',
-					'.yandex-internetometer-chart-area{opacity:.9}.yandex-internetometer-chart-line{fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}.yandex-internetometer-chart-line.is-download{stroke:var(--yi-red)}.yandex-internetometer-chart-line.is-upload{stroke:var(--yi-green)}.yandex-internetometer-chart-point{opacity:0;transition:opacity .15s ease-out}.yandex-internetometer-chart-point.is-download{fill:var(--yi-red)}.yandex-internetometer-chart-point.is-upload{fill:var(--yi-green)}',
+					'.yandex-internetometer-chart-axis{stroke:var(--yi-muted);stroke-width:1.2;opacity:.55}.yandex-internetometer-chart-direction{font-size:13px;font-weight:700}.yandex-internetometer-chart-direction.is-download{fill:var(--yi-red)}.yandex-internetometer-chart-direction.is-upload{fill:var(--yi-green)}',
+					'.yandex-internetometer-chart-bar{fill:none;stroke-linecap:round;transform-box:fill-box;animation:yi-chart-grow .7s cubic-bezier(.22,1,.36,1) both}.yandex-internetometer-chart-bar.is-download{transform-origin:50% 100%}.yandex-internetometer-chart-bar.is-upload{transform-origin:50% 0}.yandex-internetometer-chart-bar.is-download{color:var(--yi-red)}.yandex-internetometer-chart-bar.is-upload{color:var(--yi-green)}#yiChartDownloadFill{color:var(--yi-red)}#yiChartUploadFill{color:var(--yi-green)}.yandex-internetometer-chart-stop-base{stop-color:currentColor;stop-opacity:.18}.yandex-internetometer-chart-stop-tip{stop-color:currentColor;stop-opacity:.95}',
+					'.yandex-internetometer-chart-line{fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.55;animation:yi-chart-fade .8s .45s ease-out both}.yandex-internetometer-chart-line.is-download{stroke:var(--yi-red)}.yandex-internetometer-chart-line.is-upload{stroke:var(--yi-green)}.yandex-internetometer-chart-point{opacity:0;transition:opacity .15s ease-out}.yandex-internetometer-chart-point.is-download{fill:var(--yi-red)}.yandex-internetometer-chart-point.is-upload{fill:var(--yi-green)}',
+					'.yandex-internetometer-chart-average{stroke-width:1.2;stroke-dasharray:6 5;opacity:.75}.yandex-internetometer-chart-average.is-download{stroke:var(--yi-red)}.yandex-internetometer-chart-average.is-upload{stroke:var(--yi-green)}.yandex-internetometer-chart-average-label,.yandex-internetometer-chart-peak-label{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;paint-order:stroke;stroke:var(--yi-panel);stroke-width:4px;stroke-linejoin:round}.yandex-internetometer-chart-average-label.is-download,.yandex-internetometer-chart-peak-label.is-download{fill:var(--yi-red)}.yandex-internetometer-chart-average-label.is-upload,.yandex-internetometer-chart-peak-label.is-upload{fill:var(--yi-green)}.yandex-internetometer-chart-peak{fill:var(--yi-panel);stroke-width:2.4}.yandex-internetometer-chart-peak.is-download{stroke:var(--yi-red)}.yandex-internetometer-chart-peak.is-upload{stroke:var(--yi-green)}',
+					'@keyframes yi-chart-grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}@keyframes yi-chart-fade{from{opacity:0}to{opacity:.55}}@media(prefers-reduced-motion:reduce){.yandex-internetometer-chart-bar,.yandex-internetometer-chart-line{animation:none}}',
+
 					'.yandex-internetometer-chart-cursor-line{stroke:var(--yi-muted);stroke-width:1;stroke-dasharray:2 3;transition:opacity .1s ease-out}.yandex-internetometer-chart-cursor-point{stroke:var(--yi-bg);stroke-width:2;transition:opacity .1s ease-out}.yandex-internetometer-chart-cursor-point.is-download{fill:var(--yi-red)}.yandex-internetometer-chart-cursor-point.is-upload{fill:var(--yi-green)}',
 					'.yandex-internetometer-chart-tooltip{transition:opacity .1s ease-out;pointer-events:none}.yandex-internetometer-chart-tooltip rect{fill:var(--yi-bg);stroke:var(--yi-border);stroke-width:1}.yandex-internetometer-chart-tooltip text{font-size:11px;font-variant-numeric:tabular-nums}.yandex-internetometer-chart-tooltip-date{fill:var(--yi-muted)}.yandex-internetometer-chart-tooltip-download{fill:var(--yi-red)}.yandex-internetometer-chart-tooltip-upload{fill:var(--yi-green)}',
 					'.yandex-internetometer-chart-overlay{cursor:crosshair}.yandex-internetometer-chart-overlay:hover~.yandex-internetometer-chart-point{opacity:.9}',
-					'.yandex-internetometer-chart-legend{display:flex;justify-content:center;gap:22px;font-size:12px;margin-top:8px}.yandex-internetometer-chart-legend span{display:inline-flex;align-items:center;gap:6px}.yandex-internetometer-chart-legend span:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor}.yandex-internetometer-chart-legend .is-download{color:var(--yi-red)}.yandex-internetometer-chart-legend .is-upload{color:var(--yi-green)}',
+					'.yandex-internetometer-chart-legend{display:flex;justify-content:center;gap:22px;font-size:12px;margin-top:8px}.yandex-internetometer-chart-legend span{display:inline-flex;align-items:center;gap:6px}.yandex-internetometer-chart-legend span:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor}.yandex-internetometer-chart-legend .is-download{color:var(--yi-red)}.yandex-internetometer-chart-legend .is-upload{color:var(--yi-green)}.yandex-internetometer-chart-legend{flex-wrap:wrap;row-gap:6px}.yandex-internetometer-chart-legend .is-average,.yandex-internetometer-chart-legend .is-peak{color:var(--yi-muted)}.yandex-internetometer-chart-legend .is-average:before,.yandex-internetometer-chart-legend .is-peak:before{display:none}',
 					'.yandex-internetometer-history-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.yandex-internetometer-history-metric{display:grid;gap:5px;padding:13px;border-radius:9px;background:var(--yi-panel)}.yandex-internetometer-history-metric span,.yandex-internetometer-history-metric small{color:var(--yi-muted);font-size:12px}.yandex-internetometer-history-metric strong{font-size:20px;font-variant-numeric:tabular-nums}',
 					'.yandex-internetometer-history-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.yandex-internetometer-history-actions .btn{min-height:36px;padding:7px 12px;border:1px solid var(--yi-border);border-radius:8px;background:var(--yi-panel);color:var(--yi-text);cursor:pointer}.yandex-internetometer-history-table-wrap{overflow-x:auto}.yandex-internetometer-history-table{width:100%;font-variant-numeric:tabular-nums}.yandex-internetometer-history-table th,.yandex-internetometer-history-table td{color:var(--yi-text)!important;background:transparent!important}.yandex-internetometer-history-table thead th{color:var(--yi-muted)!important}.yandex-internetometer-history-empty{margin:0;color:var(--yi-muted)}',
 					'.yandex-internetometer-settings{margin-top:20px;background:var(--yi-bg);color:var(--yi-text);border:1px solid var(--yi-border);border-radius:12px;overflow:hidden}',
@@ -1375,8 +1453,8 @@ return view.extend({
 					'.yandex-internetometer-theme-dark .yandex-internetometer-detail-row{background:#20242c;border-color:#3b4350}',
 					'.yandex-internetometer-theme-dark .yandex-internetometer-detail-row span{color:#b8c0cc}',
 					'.yandex-internetometer-theme-dark .yandex-internetometer-detail-row strong{color:#f5f7fa}',
-					'@media (max-width:900px){.yandex-internetometer-speed-metric{width:160px}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:48px}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
-					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}.yandex-internetometer-history{padding:14px}.yandex-internetometer-history-head{align-items:stretch;flex-direction:column}.yandex-internetometer-history-metrics{grid-template-columns:1fr}.yandex-internetometer-chart svg{height:200px}.yandex-internetometer-settings{margin-top:16px}.yandex-internetometer-settings>summary{padding:13px 14px}.yandex-internetometer-settings>*:not(summary){padding:0 14px 4px}.yandex-internetometer-settings .cbi-value{grid-template-columns:1fr;gap:7px;padding:16px 0}.yandex-internetometer-settings .cbi-value-title{padding:0 0 0 14px}.yandex-internetometer-settings .cbi-value-description{grid-column:1}.yandex-internetometer-update{align-items:flex-start}.yandex-internetometer-update-command-row{width:100%;flex-direction:column}.yandex-internetometer-update-command code{font-size:11px}.yandex-internetometer-update-command-row .btn{min-height:38px}}',
+					'@media (max-width:900px){.yandex-internetometer-speed-metric{width:160px}.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:40px;font-size:clamp(24px,5.6cqi,40px)}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
+					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}.yandex-internetometer-history{padding:14px}.yandex-internetometer-history-head{align-items:stretch;flex-direction:column}.yandex-internetometer-history-metrics{grid-template-columns:1fr}.yandex-internetometer-chart svg{height:200px}.yandex-internetometer-settings{margin-top:16px}.yandex-internetometer-settings>summary{padding:13px 14px}.yandex-internetometer-settings>*:not(summary){padding:0 14px 4px}.yandex-internetometer-settings .cbi-value{grid-template-columns:1fr;gap:7px;padding:16px 0}.yandex-internetometer-settings .cbi-value-title{padding:0 0 0 14px}.yandex-internetometer-settings .cbi-value-description{grid-column:1}.yandex-internetometer-update{align-items:flex-start}.yandex-internetometer-update-command code{font-size:11px;flex-basis:100%}.yandex-internetometer-update-command-row .btn{flex:1 1 auto;min-height:38px}}',
 					'.yandex-internetometer-oval{max-width:800px;aspect-ratio:957/340}.yandex-internetometer-speedometer-reference{opacity:.3}.yandex-internetometer-svg-tick{transition:opacity .2s ease-out}.yandex-internetometer-speed-value{min-height:1em}.yandex-internetometer-detail-section{width:min(720px,100%)}.yandex-internetometer-detail-section summary{cursor:pointer;padding:12px 0;font-weight:600}.yandex-internetometer-run-progress{display:grid;gap:10px;width:min(720px,100%);text-align:center}.yandex-internetometer-stages{width:100%}.yandex-internetometer-quality{margin:0;color:var(--yi-muted);text-align:center}.yandex-internetometer-inline-stop{font-size:14px;min-height:44px;padding:8px 14px;border:1px solid var(--yi-border);border-radius:8px}.yandex-internetometer-topbar{flex-wrap:wrap}.yandex-internetometer-language,.yandex-internetometer-history-actions .btn,.yandex-internetometer-run-again{min-height:44px;background:var(--yi-panel)}.yandex-internetometer-run-again{background:#fcdb32}.yandex-internetometer-page button:focus-visible,.yandex-internetometer-page summary:focus-visible{outline:2px solid var(--yi-red);outline-offset:3px}.yandex-internetometer-page button:disabled{opacity:.5;cursor:wait}.yandex-internetometer-page .yandex-internetometer-speed-metric{transition:opacity .2s ease-out;transform:translate(-50%,-50%)}@media(prefers-reduced-motion:reduce){.yandex-internetometer-page .yandex-internetometer-speed-metric,.yandex-internetometer-page .yandex-internetometer-stage-pill{transition:none}}@media(max-width:680px){.yandex-internetometer-page .yandex-internetometer-oval{aspect-ratio:auto;min-height:320px;padding:20px 0;box-sizing:border-box}.yandex-internetometer-page .is-ready .yandex-internetometer-oval{min-height:150px}.yandex-internetometer-page .yandex-internetometer-speedometer-svg{display:none}.yandex-internetometer-page .yandex-internetometer-speed-grid{display:grid;gap:24px;width:100%}.yandex-internetometer-page .yandex-internetometer-speed-metric,.yandex-internetometer-page .yandex-internetometer-speed-metric.is-active{position:static;transform:none;width:100%}.yandex-internetometer-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}',
 				].join('')),
 				E('div', { 'class': 'yandex-internetometer-topbar' }, [

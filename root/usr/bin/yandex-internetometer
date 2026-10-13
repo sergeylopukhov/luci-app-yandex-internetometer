@@ -10,9 +10,11 @@ LOG_FILE="$STATE_DIR/debug.log"; PROBES_FILE="$STATE_DIR/probes.json"; PUBLIC_IP
 WORKER_FILE="$STATE_DIR/workers"
 SELF="${YANDEX_INTERNETOMETER_SELF:-/usr/bin/yandex-internetometer}"
 ENGINE="${YANDEX_INTERNETOMETER_ENGINE:-/usr/libexec/yandex-internetometer/transfer}"
+NATIVE_ENGINE="${YANDEX_INTERNETOMETER_NATIVE_ENGINE:-/usr/libexec/yandex-internetometer/transfer-native}"
+ACTIVE_ENGINE="$ENGINE"; ENGINE_NAME=""
 GET_PROBES_URL="https://yandex.ru/internet/api/v0/get-probes"
 REFERER="https://yandex.ru/internet/"; USER_AGENT="Mozilla/5.0 (OpenWrt; Yandex Internetometer)"
-STREAMS=auto; UPLOAD_STREAMS=auto; EFFECTIVE_UPLOAD_STREAMS=""; DOWNLOAD_TIME=15; UPLOAD_TIME=25; UPLOAD_SIZE=8000000
+STREAMS=auto; UPLOAD_STREAMS=auto; EFFECTIVE_UPLOAD_STREAMS=""; DOWNLOAD_TIME=10; UPLOAD_TIME=10; UPLOAD_SIZE=8000000
 UPLOAD_ENABLED=1; TRANSFER_PROTOCOL=auto; ACTUAL_PROTOCOL=https; HTTPS_FALLBACK=0; DEBUG=0; JSON_MODE=0; PROGRESS_PHASE=""; LATENCY_SAMPLES=60
 CHILD_PIDS=""; RUN_STARTED=""; PHASE_STARTED=0; PHASE_DURATION=0; CURRENT_RATE=null; CPU_PEAK=0; CPU_CURRENT=0; CPU_TOTAL_CURRENT=0; CPU_TOTAL_PEAK=0; MEM_MIN=0; QUALITY=unknown; STOPPING=0
 DOWNLOAD_VALUE=null; UPLOAD_VALUE=null; PING_VALUE=null; JITTER_VALUE=null; PROBES_VALUE=0; SERVER_VALUE=null
@@ -36,13 +38,13 @@ public_ip() {
 	case "$ip" in *.*.*.*) printf '%s\n' "$ip" > "$PUBLIC_IP_FILE"; printf %s "$ip";; esac
 }
 json_result() {
-	jq -cn --argjson ok "$1" --argjson running "$2" --arg timestamp "$(timestamp)" --arg phase "$PROGRESS_PHASE" --arg download "$3" --arg upload "$4" --arg ping "$5" --arg jitter "$6" --argjson probe_count "${7:-0}" --arg server "$8" --arg error "$9" --arg protocol "$ACTUAL_PROTOCOL" --argjson fallback "$HTTPS_FALLBACK" --arg requested "$TRANSFER_PROTOCOL" --arg version "$(cat "$VERSION_FILE" 2>/dev/null || printf 1.0.2)" --arg public_ip "$(cat "$PUBLIC_IP_FILE" 2>/dev/null)" --arg started_at "$RUN_STARTED" --argjson phase_started "${PHASE_STARTED:-0}" --argjson phase_duration "$PHASE_DURATION" --argjson current_mbps "$CURRENT_RATE" --argjson cpu_peak "$CPU_PEAK" --argjson mem_min "$MEM_MIN" --arg quality "$QUALITY" --arg upload_streams "${EFFECTIVE_UPLOAD_STREAMS:-$UPLOAD_STREAMS}" --arg streams "${EFFECTIVE_STREAMS:-$STREAMS}" --argjson download_time "$DOWNLOAD_TIME" --argjson upload_time "$UPLOAD_TIME" --argjson upload_enabled "$UPLOAD_ENABLED" --argjson latency_samples "$LATENCY_SAMPLES" '
+	jq -cn --argjson ok "$1" --argjson running "$2" --arg timestamp "$(timestamp)" --arg phase "$PROGRESS_PHASE" --arg download "$3" --arg upload "$4" --arg ping "$5" --arg jitter "$6" --argjson probe_count "${7:-0}" --arg server "$8" --arg error "$9" --arg protocol "$ACTUAL_PROTOCOL" --argjson fallback "$HTTPS_FALLBACK" --arg requested "$TRANSFER_PROTOCOL" --arg version "$(cat "$VERSION_FILE" 2>/dev/null || printf 1.0.2)" --arg public_ip "$(cat "$PUBLIC_IP_FILE" 2>/dev/null)" --arg started_at "$RUN_STARTED" --argjson phase_started "${PHASE_STARTED:-0}" --argjson phase_duration "$PHASE_DURATION" --argjson current_mbps "$CURRENT_RATE" --argjson cpu_peak "$CPU_PEAK" --argjson mem_min "$MEM_MIN" --arg quality "$QUALITY" --arg upload_streams "${EFFECTIVE_UPLOAD_STREAMS:-$UPLOAD_STREAMS}" --arg streams "${EFFECTIVE_STREAMS:-$STREAMS}" --argjson download_time "$DOWNLOAD_TIME" --argjson upload_time "$UPLOAD_TIME" --argjson upload_enabled "$UPLOAD_ENABLED" --argjson latency_samples "$LATENCY_SAMPLES" --arg engine "$ENGINE_NAME" '
 		def n($x): if $x == "" or $x == "null" then null else (try ($x|tonumber) catch null) end;
-		{ok:$ok,running:$running,timestamp:$timestamp,phase:(if $phase=="" then null else $phase end),download_mbps:n($download),upload_mbps:n($upload),ping_ms:n($ping),jitter_ms:n($jitter),started_at:$started_at,phase_started:$phase_started,phase_duration:$phase_duration,current_mbps:$current_mbps,cpu_peak:$cpu_peak,mem_available_min_kb:$mem_min,quality:$quality,streams:n($streams),upload_streams:n($upload_streams),download_time:$download_time,upload_time:$upload_time,upload_enabled:$upload_enabled,latency_samples:$latency_samples,probe_count:$probe_count,public_ip:(if $public_ip=="" then null else $public_ip end),server:(if $server=="" or $server=="null" then null else $server end),error:(if $error=="" or $error=="null" then null else $error end),transfer_protocol:$protocol,requested_transfer_protocol:$requested,https_fallback:($fallback==1),version:$version}'
+		{ok:$ok,running:$running,timestamp:$timestamp,phase:(if $phase=="" then null else $phase end),download_mbps:n($download),upload_mbps:n($upload),ping_ms:n($ping),jitter_ms:n($jitter),started_at:$started_at,phase_started:$phase_started,phase_duration:$phase_duration,current_mbps:$current_mbps,cpu_peak:$cpu_peak,mem_available_min_kb:$mem_min,quality:$quality,streams:n($streams),upload_streams:n($upload_streams),download_time:$download_time,upload_time:$upload_time,upload_enabled:$upload_enabled,latency_samples:$latency_samples,probe_count:$probe_count,public_ip:(if $public_ip=="" then null else $public_ip end),server:(if $server=="" or $server=="null" then null else $server end),error:(if $error=="" or $error=="null" then null else $error end),transfer_protocol:$protocol,requested_transfer_protocol:$requested,https_fallback:($fallback==1),engine:(if $engine=="" then null else $engine end),version:$version}'
 }
 history_append() {
 	ensure_history_dir || return 1
-	record="$(printf '%s\n' "$1" | jq -c --arg id "$(date +%s)-$$" '{id:$id,timestamp,download_mbps,upload_mbps,ping_ms,jitter_ms,streams,upload_streams,server,transfer_protocol,version,quality,cpu_peak,mem_available_min_kb}')" || return 1
+	record="$(printf '%s\n' "$1" | jq -c --arg id "$(date +%s)-$$" '{id:$id,timestamp,download_mbps,upload_mbps,ping_ms,jitter_ms,streams,upload_streams,server,transfer_protocol,engine,version,quality,cpu_peak,mem_available_min_kb}')" || return 1
 	printf '%s\n' "$record" >> "$HISTORY_FILE" || return 1
 	chmod 600 "$HISTORY_FILE" 2>/dev/null || true
 	lines="$(wc -l < "$HISTORY_FILE" | tr -d ' ')"
@@ -87,13 +89,25 @@ fetch_probes() { curl -fsSL --connect-timeout 5 --max-time 10 -H "Referer: $REFE
 probe_count() { jq '[.latency.probes[]?.url,.download.probes[]?.url,.upload.probes[]?.url]|length' "$PROBES_FILE"; }
 server_name() { jq -r '.latency.probes[0].url // empty' "$PROBES_FILE" | sed -n 's#^https://\([^/]*\).*#\1#p'; }
 latency_urls() { jq -r '.latency.probes[]?.url' "$PROBES_FILE"; }
-safe_transfer_url() { kind="$1"; url="$2"; case "$url" in https://*.cdn.yandex.net/*) ;; *) return 1;; esac; case "$kind:$url" in download:*'/probes/50mb'*|upload:*'/upload?'*'size='*) printf '%s\n' "$url";; *) return 1;; esac; }
-transfer_urls() { kind="$1"; jq -r ".${kind}.probes[]?.url" "$PROBES_FILE" 2>/dev/null | while IFS= read -r u; do safe_transfer_url "$kind" "$u"; done; }
+safe_transfer_url() { kind="$1"; url="$2"; case "$url" in https://*.cdn.yandex.net/*) ;; *) return 1;; esac; case "$kind:$url" in download:*'/probes/50mb'*|upload:*'/upload-http?type=upload&sid='*) printf '%s\n' "$url";; *) return 1;; esac; }
+safe_stats_url() { case "$1" in https://*.cdn.yandex.net/*'/upload-http?type=stats&sid='*) printf '%s\n' "$1";; *) return 1;; esac; }
+# Upload probes are "postUrl<TAB>statsUrl" pairs; the server's own byte counter is paired with each POST.
+transfer_urls() {
+	kind="$1"
+	if [ "$kind" = upload ]; then
+		jq -r '.upload.probes[]? | select(.postUrl and .statsUrl) | [.postUrl, .statsUrl] | @tsv' "$PROBES_FILE" 2>/dev/null | while IFS="$(printf '\t')" read -r post stats; do
+			safe_transfer_url upload "$post" >/dev/null && safe_stats_url "$stats" >/dev/null && printf '%s\t%s\n' "$post" "$stats"
+		done
+		return 0
+	fi
+	jq -r ".${kind}.probes[]?.url" "$PROBES_FILE" 2>/dev/null | while IFS= read -r u; do safe_transfer_url "$kind" "$u"; done
+}
 http_url() { printf '%s\n' "$1" | sed 's#^https://#http://#'; }
 http_code() { curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 4 --max-redirs 0 "$@" 2>>"$LOG_FILE" || printf 000; }
 is_2xx() { case "$1" in 2*) return 0;; *) return 1;; esac; }
+# HTTP is used only when both the download and the upload probe answer over HTTP.
 select_transport() {
-	download_url="$(sed -n '1p' "$1")"; upload_url="$(sed -n '1p' "$2")"; ACTUAL_PROTOCOL=https; HTTPS_FALLBACK=0
+	download_url="$(sed -n '1p' "$1")"; upload_url="$(sed -n '1p' "$2" | cut -f1)"; ACTUAL_PROTOCOL=https; HTTPS_FALLBACK=0
 	[ "$TRANSFER_PROTOCOL" = https ] && return 0
 	code="$(http_code -r 0-0 "$(http_url "$download_url")")"
 	if is_2xx "$code" && { [ "$UPLOAD_ENABLED" = 0 ] || is_2xx "$(http_code -X POST -H 'Content-Type: application/octet-stream' --data-binary '0000000000000000' "$(http_url "$upload_url")")"; }; then ACTUAL_PROTOCOL=http; return 0; fi
@@ -101,6 +115,12 @@ select_transport() {
 	HTTPS_FALLBACK=1; debug_log 'HTTP probe unavailable, using HTTPS fallback'
 }
 selected_url() { [ "$ACTUAL_PROTOCOL" = http ] && http_url "$1" || printf '%s\n' "$1"; }
+# The native engine speaks plain HTTP only; HTTPS keeps TLS verification through curl.
+select_engine() {
+	ACTIVE_ENGINE="$ENGINE"; ENGINE_NAME=curl
+	if [ "$ACTUAL_PROTOCOL" = http ] && [ -x "$NATIVE_ENGINE" ] && "$NATIVE_ENGINE" --probe >/dev/null 2>&1; then ACTIVE_ENGINE="$NATIVE_ENGINE"; ENGINE_NAME=native; fi
+	debug_log "Transfer engine: $ENGINE_NAME over $ACTUAL_PROTOCOL"
+}
 
 latency_stats() { awk '{v[++n]=$1*1000;s+=v[n]} END{if(!n){print "null null";exit} for(i=1;i<=n;i++){d=v[i]-s/n;if(d<0)d=-d;j+=d}printf "%.2f %.2f",s/n,j/n}' "$1"; }
 sum_files() { awk '{s+=$1} END{printf "%.0f",s+0}' "$@"; }
@@ -127,12 +147,25 @@ choose_streams() {
     [ "$cpus" -gt 0 ] || cpus=1
     mem="$(awk '/MemAvailable:/{print $2}' /proc/meminfo)"
     load="$(awk '{print $1}' /proc/loadavg)"
-    max="$(awk -v c="$cpus" -v l="$load" -v m="${mem:-0}" 'BEGIN{n=c-int(l);if(n>4)n=4;if(m<65536&&n>2)n=2;if(m<32768)n=1;if(n<1)n=1;print n}')"
-    if { [ "$CPU_TOTAL_CURRENT" -ge 85 ] || { [ "${1:-initial}" = upload ] && [ "$CPU_TOTAL_PEAK" -ge 85 ]; }; } && [ "$max" -gt 1 ]; then max=$((max/2)); fi
+    if [ "$ENGINE_NAME" = native ]; then
+        # One process, fixed buffers: sockets cost little CPU. On a 4x Cortex-A53 router
+        # upload gave 908 Mbit/s with 2 streams and 927 with 4; download peaked at 4.
+        max="$(awk -v c="$cpus" -v m="${mem:-0}" 'BEGIN{n=(c>1?4:2);if(m<65536&&n>2)n=2;if(m<32768)n=1;print n}')"
+    else
+        # The curl engine spends a process and TLS per stream, so it follows CPU headroom.
+        max="$(awk -v c="$cpus" -v l="$load" -v m="${mem:-0}" 'BEGIN{n=c-int(l);if(n>4)n=4;if(m<65536&&n>2)n=2;if(m<32768)n=1;if(n<1)n=1;print n}')"
+        if { [ "$CPU_TOTAL_CURRENT" -ge 85 ] || { [ "${1:-initial}" = upload ] && [ "$CPU_TOTAL_PEAK" -ge 85 ]; }; } && [ "$max" -gt 1 ]; then max=$((max/2)); fi
+    fi
     if [ "${1:-initial}" = initial ]; then
         EFFECTIVE_STREAMS="$STREAMS"; [ "$STREAMS" = auto ] && EFFECTIVE_STREAMS="$max"
     fi
     EFFECTIVE_UPLOAD_STREAMS="$UPLOAD_STREAMS"; [ "$UPLOAD_STREAMS" = auto ] && EFFECTIVE_UPLOAD_STREAMS="$max"
+    # Automatic upload streams never share a server counter (one statsUrl per probe).
+    if [ "$UPLOAD_STREAMS" = auto ] && [ -s "${tmpdir:-}/upload.selected" ]; then
+        probes="$(wc -l < "$tmpdir/upload.selected" | tr -d ' ')"
+        [ "$probes" -gt 0 ] && [ "$EFFECTIVE_UPLOAD_STREAMS" -gt "$probes" ] && EFFECTIVE_UPLOAD_STREAMS="$probes"
+    fi
+    return 0
 }
 write_state() {
     write_progress "$PROGRESS_PHASE" true "$DOWNLOAD_VALUE" "$UPLOAD_VALUE" "$PING_VALUE" "$JITTER_VALUE" "$PROBES_VALUE" "$SERVER_VALUE" null
@@ -183,7 +216,7 @@ measure_bandwidth() {
     local kind="$1" duration="$2" streams="$3" sample="$tmpdir/$1.sample" pid result rate
     PROGRESS_PHASE="$kind"; PHASE_STARTED="$(date +%s)"; PHASE_DURATION=$((duration+1)); CURRENT_RATE=null
     write_state
-    "$ENGINE" "$kind" "$duration" "$streams" "$UPLOAD_SIZE" "$tmpdir/$kind.selected" "$sample" > "$tmpdir/$kind.final" 2>>"$LOG_FILE" & pid=$!; CHILD_PIDS="$pid"
+    "$ACTIVE_ENGINE" "$kind" "$duration" "$streams" "$UPLOAD_SIZE" "$tmpdir/$kind.selected" "$sample" > "$tmpdir/$kind.final" 2>>"$LOG_FILE" & pid=$!; CHILD_PIDS="$pid"
     while kill -0 "$pid" 2>/dev/null; do
         sleep 1; resource_sample
         if [ -s "$sample" ]; then
@@ -209,18 +242,19 @@ run_test() {
     tmpdir="$(mktemp -d "$STATE_DIR/run.XXXXXX")" || { rmdir "$LOCK_DIR"; return 1; }
     trap cleanup EXIT; trap cancel_run INT TERM
     RUN_STARTED="$(timestamp)"; : > "$LOG_FILE"; public_ip >/dev/null
-    [ -x "$ENGINE" ] || { PROGRESS_PHASE=error; finish_state false 'Transfer engine is missing'; return 1; }
-    resource_sample; sleep 1; resource_sample; choose_streams
+    [ -x "$ENGINE" ] || [ -x "$NATIVE_ENGINE" ] || { PROGRESS_PHASE=error; finish_state false 'Transfer engine is missing'; return 1; }
+    resource_sample; sleep 1; resource_sample
     PROGRESS_PHASE=prepare; write_state
     fetch_probes
     PROBES_VALUE="$(probe_count)"; SERVER_VALUE="$(server_name)"
     transfer_urls download > "$tmpdir/download.urls"; transfer_urls upload > "$tmpdir/upload.urls"
     [ -s "$tmpdir/download.urls" ] && { [ "$UPLOAD_ENABLED" = 0 ] || [ -s "$tmpdir/upload.urls" ]; } || { PROGRESS_PHASE=error; finish_state false 'No safe transfer probes'; return 1; }
     select_transport "$tmpdir/download.urls" "$tmpdir/upload.urls"
-    local kind url
-    for kind in download upload; do
-        while IFS= read -r url; do selected_url "$url"; done < "$tmpdir/$kind.urls" > "$tmpdir/$kind.selected"
-    done
+    local url stats
+    while IFS= read -r url; do selected_url "$url"; done < "$tmpdir/download.urls" > "$tmpdir/download.selected"
+    while IFS="$(printf '\t')" read -r url stats; do printf '%s\t%s\n' "$(selected_url "$url")" "$(selected_url "$stats")"; done < "$tmpdir/upload.urls" > "$tmpdir/upload.selected"
+    select_engine; choose_streams
+    [ "$ENGINE_NAME" = native ] || [ -x "$ENGINE" ] || { PROGRESS_PHASE=error; finish_state false 'Transfer engine is missing'; return 1; }
     if ! measure_latency "$tmpdir/latency"; then PROGRESS_PHASE=error; QUALITY=failed; finish_state false 'Unable to measure latency'; return 1; fi
     if ! measure_bandwidth download "$DOWNLOAD_TIME" "$EFFECTIVE_STREAMS"; then PROGRESS_PHASE=error; QUALITY=partial; finish_state false 'Download failed; result is incomplete'; return 1; fi
     choose_streams upload

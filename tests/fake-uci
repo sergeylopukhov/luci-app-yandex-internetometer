@@ -1,0 +1,23 @@
+#!/bin/sh
+# Minimal uci double for tests: staged changes become visible to "get" at once and
+# reach $UCI_DIR/committed only on "commit". UCI_FAIL_COMMIT=N fails the N-th commit.
+# Uncommitted changes live per boot ($UCI_DIR/boot), as /tmp/.uci does on a router.
+set -u
+dir="${UCI_DIR:?}"; staged="$dir/staged.$(cat "$dir/boot" 2>/dev/null || echo 0)"; committed="$dir/committed"
+[ -f "$staged" ] || cp "$committed" "$staged"
+[ "${1:-}" = -q ] && shift
+cmd="$1"; shift
+case "$cmd" in
+  get)
+    key="$1"
+    awk -F= -v k="$key" '$1==k{v=substr($0,length(k)+2); found=1} END{if(!found) exit 1; print v}' "$staged" ;;
+  set)
+    key="${1%%=*}"; value="${1#*=}"
+    awk -F= -v k="$key" '$1!=k' "$staged" > "$staged.tmp" && printf '%s=%s\n' "$key" "$value" >> "$staged.tmp" && mv "$staged.tmp" "$staged" ;;
+  commit)
+    n=$(( $(cat "$dir/commits" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$dir/commits"
+    [ "$n" = "${UCI_FAIL_COMMIT:-0}" ] && exit 1
+    cp "$staged" "$committed" ;;
+  show) cat "$staged" ;;
+  *) exit 2 ;;
+esac
