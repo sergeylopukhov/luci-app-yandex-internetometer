@@ -9,15 +9,15 @@ on:
       release_tag:
         description: Existing immutable tag to publish
         required: true
-        default: v1.1.1
+        default: v1.1.2
 
 permissions:
   contents: write
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PROJECT_VERSION: 1.1.1
-  PKG_VERSION: 1.1.1-r1
+  PROJECT_VERSION: 1.1.2
+  PKG_VERSION: 1.1.2-r1
 
 jobs:
   build:
@@ -45,6 +45,7 @@ jobs:
           sudo apt-get install -y libcurl4-openssl-dev
           cc -Wall -Wextra -Werror -O2 src/transfer.c -lcurl -o /tmp/yi-transfer-test
           python3 tests/test-transfer.py /tmp/yi-transfer-test
+          python3 tests/test-transfer-shell.py root/usr/libexec/yandex-internetometer/transfer
 
       - name: Prepare package root
         run: |
@@ -78,7 +79,7 @@ jobs:
           License: MIT
           Section: luci
           URL: https://github.com/sergeylopukhov/luci-app-yandex-internetometer
-          Maintainer: Sergey Lopukhov
+          Maintainer: Sergey Lopukhov <sergey.lopukhov@gmail.com>
           Architecture: all
           Description:  LuCI app for unofficial Yandex Internetometer-compatible speed tests
           EOF
@@ -176,7 +177,7 @@ jobs:
               --info "license:MIT" \
               --info "origin:$PKG_NAME" \
               --info "url:https://github.com/sergeylopukhov/luci-app-yandex-internetometer" \
-              --info "maintainer:Sergey Lopukhov" \
+              --info "maintainer:Sergey Lopukhov <sergey.lopukhov@gmail.com>" \
               --info "description:LuCI app for unofficial Yandex Internetometer-compatible speed tests" \
               --info "depends:libc curl jq" \
               --script "post-install:$GITHUB_WORKSPACE/scripts/post-install" \
@@ -187,7 +188,8 @@ jobs:
           done
 
           REPO="$GITHUB_WORKSPACE/docs/packages"
-          rm -rf "$REPO" "$GITHUB_WORKSPACE/docs/keys"
+          mv "$REPO" "$RUNNER_TEMP/previous-packages"
+          mv "$GITHUB_WORKSPACE/docs/keys" "$RUNNER_TEMP/previous-keys"
           mkdir -p "$REPO" "$GITHUB_WORKSPACE/docs/keys"
           cp "$GITHUB_WORKSPACE/dist/yandex-internetometer.rsa.pub" "$GITHUB_WORKSPACE/docs/keys/yandex-internetometer.rsa.pub"
           for arch in $ARCHES; do
@@ -287,7 +289,8 @@ jobs:
           case "$TAG" in *[!A-Za-z0-9._-]*) echo "Unsafe release tag: $TAG" >&2; exit 1;; esac
           git config user.name "Sergey Lopukhov"
           git config user.email "sergey.lopukhov@gmail.com"
-          rm -rf docs/packages docs/keys
+          mv docs/packages "$RUNNER_TEMP/previous-packages"
+          mv docs/keys "$RUNNER_TEMP/previous-keys"
           tar -C docs -xzf "$RUNNER_TEMP/pages-apk-repository/yandex-internetometer-apk-repository.tar.gz"
           cat > docs/version.json <<EOF
           {

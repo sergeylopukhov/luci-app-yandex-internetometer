@@ -1,26 +1,80 @@
-#!/bin/ash
+#!/bin/sh
+# Portable engine used by the published APK/IPK packages.
 set -eu
+[ "$#" -eq 6 ] || exit 2
 kind="$1"; duration="$2"; streams="$3"; size="$4"; urls="$5"; sample="$6"
-dir="${sample}.parts"; mkdir -p "$dir"; start="$(date +%s)"; end=$((start + duration)); payload="${sample}.payload"
-cleanup() { kill $pids 2>/dev/null || true; rm -rf "$dir" "$payload"; }
-trap cleanup EXIT INT TERM
-[ "$kind" = download ] || dd if=/dev/zero of="$payload" bs=1024 count=$(( (size + 1023) / 1024 )) 2>/dev/null
-pids=""; i=1; count="$(wc -l < "$urls")"
+case "$kind" in download|upload) ;; *) exit 2;; esac
+uint_range() {
+  case "$1" in ''|*[!0-9]*) return 1;; esac
+  [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]
+}
+uint_range "$duration" 1 60 && uint_range "$streams" 1 12 && uint_range "$size" 1024 200000000 || exit 2
+[ -s "$urls" ] || exit 2
+count="$(wc -l < "$urls")"; [ "$count" -gt 0 ] || exit 2
+clock() { awk '{print $1}' /proc/uptime 2>/dev/null || date +%s; }
+dir="${sample}.parts"; mkdir -p "$dir"; payload="${sample}.payload"; pids=""
+cleanup() { kill $pids 2>/dev/null || true; wait $pids 2>/dev/null || true; rm -rf "$dir" "$payload"; }
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+# Stream the file from curl rather than allocating a copy in every worker.
+if [ "$kind" = upload ]; then
+  dd if=/dev/zero of="$payload" bs=1024 count=$((size / 1024)) 2>/dev/null
+  remainder=$((size % 1024))
+  [ "$remainder" -eq 0 ] || dd if=/dev/zero bs=1 count="$remainder" >> "$payload" 2>/dev/null
+fi
+start="$(clock)"; end="$(awk -v s="$start" -v d="$duration" 'BEGIN{printf "%.3f",s+d}')"
+i=1
 while [ "$i" -le "$streams" ]; do
-  n=$(( (i - 1) % count + 1 )); url="$(sed -n "${n}p" "$urls")"; out="$dir/$i"; : > "$out"
+  n=$(( (i - 1) % count + 1 )); url="$(sed -n "${n}p" "$urls")"; out="$dir/$i.metrics"; : > "$out"
+  case "$url" in http://*|https://*) ;; *) exit 2;; esac
   (
-    while [ "$(date +%s)" -lt "$end" ]; do
-      if [ "$kind" = download ]; then curl -fsS --connect-timeout 4 --max-time 3 -o /dev/null -w '%{size_download}\n' "$url" >> "$out" 2>/dev/null || true
-      else curl -fsS --connect-timeout 4 --max-time 3 -H 'Content-Type: application/octet-stream' --data-binary "@$payload" -w '%{size_upload}\n' "$url" >> "$out" 2>/dev/null || true
+    curl_pid=""
+    trap '[ -z "$curl_pid" ] || { kill "$curl_pid" 2>/dev/null || true; wait "$curl_pid" 2>/dev/null || true; }; exit 130' INT TERM
+    while :; do
+      remaining="$(awk -v e="$end" -v n="$(clock)" 'BEGIN{printf "%.3f",e-n}')"
+      awk -v r="$remaining" 'BEGIN{exit !(r>0)}' || break
+      result=0
+      if [ "$kind" = download ]; then
+        curl -fsS --connect-timeout 4 --max-time "$remaining" -o /dev/null -w '%{size_download} %{http_code}\n' "$url" > "$out.request" &
+      else
+        # The response (e.g. OK) must never enter the byte counter.
+        curl -fsS --connect-timeout 4 --max-time "$remaining" -o /dev/null -H 'Content-Type: application/octet-stream' -H 'Expect:' -X POST --upload-file "$payload" -w '%{size_upload} %{http_code}\n' "$url" > "$out.request" &
       fi
+      curl_pid=$!; wait "$curl_pid" || result=$?; curl_pid=""
+      # A timeout at the measurement deadline intentionally ends a request.
+      deadline=0
+      if [ "$result" -eq 28 ] && awk -v e="$end" -v n="$(clock)" 'BEGIN{exit !(n>=e-0.05)}'; then deadline=1; fi
+      awk -v rc="$result" -v deadline="$deadline" -v kind="$kind" '
+        BEGIN{bytes=0;responses=0;errors=(rc!=0&&!deadline)}
+        NF==2 && $1 ~ /^[0-9]+$/ && $2 ~ /^2[0-9][0-9]$/ {
+          if(rc==0 || (deadline && kind=="download")){bytes=$1;responses=1}
+        }
+        END{if(rc==0&&!responses)errors=1;printf "%.0f %d %d\n",bytes,responses,errors}
+      ' "$out.request" >> "$out"
+      [ "$result" -eq 0 ] && [ "$(awk 'END{print $3}' "$out")" -eq 0 ] || break
     done
   ) & pids="$pids $!"; i=$((i + 1))
 done
-while [ "$(date +%s)" -lt "$end" ]; do
-  bytes="$(awk '{s+=$1} END{printf "%.0f",s+0}' "$dir"/* 2>/dev/null)"; elapsed=$(( $(date +%s) - start )); [ "$elapsed" -gt 0 ] || elapsed=1
-  rate="$(awk -v b="$bytes" -v s="$elapsed" 'BEGIN{printf "%.2f",b*8/s/1000000}')"
-  printf '{"current_mbps":%s,"average_mbps":%s}\n' "$rate" "$rate" > "$sample"; sleep 1
+stats() { awk '{b+=$1;r+=$2;e+=$3} END{printf "%.0f %d %d",b+0,r+0,e+0}' "$dir"/*.metrics 2>/dev/null; }
+snapshot() {
+  set -- $(stats)
+  bytes="$1"; responses="$2"; errors="$3"
+  elapsed="$(awk -v n="$(clock)" -v s="$start" 'BEGIN{printf "%.3f",n-s}')"
+  rate="$(awk -v b="$bytes" -v s="$elapsed" 'BEGIN{if(s>0)printf "%.2f",b*8/s/1000000;else printf "0.00"}')"
+  printf '{"current_mbps":%s,"average_mbps":%s,"elapsed":%s,"responses":%s,"errors":%s,"final":%s}\n' "$rate" "$rate" "$elapsed" "$responses" "$errors" "$final" > "$sample.tmp"
+  mv "$sample.tmp" "$sample"
+}
+# Publish atomically so the controller never reads a half-written JSON record.
+final=false
+while awk -v e="$end" -v n="$(clock)" 'BEGIN{exit !(n<e)}'; do
+  snapshot
+  [ "$errors" -eq 0 ] || break
+  sleep 1
 done
 wait $pids 2>/dev/null || true
-bytes="$(awk '{s+=$1} END{printf "%.0f",s+0}' "$dir"/* 2>/dev/null)"; elapsed=$(( $(date +%s) - start )); [ "$elapsed" -gt 0 ] || elapsed=1
-awk -v b="$bytes" -v s="$elapsed" 'BEGIN{printf "%.2f\n",b*8/s/1000000}'
+final=true; snapshot
+if [ "$errors" -gt 0 ] || [ "$responses" -eq 0 ] || [ "$bytes" -le 0 ]; then
+  printf '%s\n' 'Transfer failed: no valid throughput result' >&2
+  exit 1
+fi
+printf '%s\n' "$rate"

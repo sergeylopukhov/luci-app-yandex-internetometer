@@ -1,10 +1,10 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-yandex-internetometer
-PKG_VERSION:=1.1.1
+PKG_VERSION:=1.1.2
 PKG_RELEASE:=1
 
-PKG_MAINTAINER:=OpenWrt community
+PKG_MAINTAINER:=Sergey Lopukhov <sergey.lopukhov@gmail.com>
 PKG_LICENSE:=MIT
 
 LUCI_TITLE:=LuCI support for Yandex Internetometer-compatible speed test

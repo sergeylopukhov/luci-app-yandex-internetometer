@@ -197,6 +197,7 @@ measure_bandwidth() {
     [ "$result" -eq 0 ] || return 1
     rate="$(cat "$tmpdir/$kind.final")"
     case "$rate" in ''|*[!0-9.]*) return 1;; esac
+    awk -v rate="$rate" 'BEGIN{exit !(rate ~ /^[0-9]+([.][0-9]+)?$/ && rate>0)}' || return 1
     if [ "$kind" = download ]; then DOWNLOAD_VALUE="$rate"; else UPLOAD_VALUE="$rate"; fi
     CURRENT_RATE=null
 }
