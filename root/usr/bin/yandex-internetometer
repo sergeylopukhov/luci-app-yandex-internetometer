@@ -15,8 +15,8 @@ ACTIVE_ENGINE="$ENGINE"; ENGINE_NAME=""
 GET_PROBES_URL="https://yandex.ru/internet/api/v0/get-probes"
 REFERER="https://yandex.ru/internet/"; USER_AGENT="Mozilla/5.0 (OpenWrt; Yandex Internetometer)"
 STREAMS=auto; UPLOAD_STREAMS=auto; EFFECTIVE_UPLOAD_STREAMS=""; DOWNLOAD_TIME=10; UPLOAD_TIME=10; UPLOAD_SIZE=8000000
-UPLOAD_ENABLED=1; TRANSFER_PROTOCOL=auto; ACTUAL_PROTOCOL=https; HTTPS_FALLBACK=0; DEBUG=0; JSON_MODE=0; PROGRESS_PHASE=""; LATENCY_SAMPLES=60
-CHILD_PIDS=""; RUN_STARTED=""; PHASE_STARTED=0; PHASE_DURATION=0; CURRENT_RATE=null; CPU_PEAK=0; CPU_CURRENT=0; CPU_TOTAL_CURRENT=0; CPU_TOTAL_PEAK=0; MEM_MIN=0; QUALITY=unknown; STOPPING=0
+UPLOAD_ENABLED=1; TRANSFER_PROTOCOL=auto; ACTUAL_PROTOCOL=https; HTTPS_FALLBACK=0; DEBUG=0; JSON_MODE=0; PROGRESS_PHASE=""; LATENCY_SAMPLES=30
+CHILD_PIDS=""; RUN_STARTED=""; PHASE_STARTED=0; PHASE_DURATION=0; CURRENT_RATE=null; DOWNLOAD_PEAK=null; UPLOAD_PEAK=null; CPU_PEAK=0; CPU_CURRENT=0; CPU_TOTAL_CURRENT=0; CPU_TOTAL_PEAK=0; MEM_MIN=0; QUALITY=unknown; STOPPING=0
 DOWNLOAD_VALUE=null; UPLOAD_VALUE=null; PING_VALUE=null; JITTER_VALUE=null; PROBES_VALUE=0; SERVER_VALUE=null
 
 usage() { printf '%s\n' 'Usage: yandex-internetometer run [--json] [--streams N] [--upload-streams auto|N] [--transfer-protocol auto|http|https] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1] [--latency-samples N]' '       yandex-internetometer start|status|stop|history|history-clear'; }
@@ -38,13 +38,13 @@ public_ip() {
 	case "$ip" in *.*.*.*) printf '%s\n' "$ip" > "$PUBLIC_IP_FILE"; printf %s "$ip";; esac
 }
 json_result() {
-	jq -cn --argjson ok "$1" --argjson running "$2" --arg timestamp "$(timestamp)" --arg phase "$PROGRESS_PHASE" --arg download "$3" --arg upload "$4" --arg ping "$5" --arg jitter "$6" --argjson probe_count "${7:-0}" --arg server "$8" --arg error "$9" --arg protocol "$ACTUAL_PROTOCOL" --argjson fallback "$HTTPS_FALLBACK" --arg requested "$TRANSFER_PROTOCOL" --arg version "$(cat "$VERSION_FILE" 2>/dev/null || printf 1.0.2)" --arg public_ip "$(cat "$PUBLIC_IP_FILE" 2>/dev/null)" --arg started_at "$RUN_STARTED" --argjson phase_started "${PHASE_STARTED:-0}" --argjson phase_duration "$PHASE_DURATION" --argjson current_mbps "$CURRENT_RATE" --argjson cpu_peak "$CPU_PEAK" --argjson mem_min "$MEM_MIN" --arg quality "$QUALITY" --arg upload_streams "${EFFECTIVE_UPLOAD_STREAMS:-$UPLOAD_STREAMS}" --arg streams "${EFFECTIVE_STREAMS:-$STREAMS}" --argjson download_time "$DOWNLOAD_TIME" --argjson upload_time "$UPLOAD_TIME" --argjson upload_enabled "$UPLOAD_ENABLED" --argjson latency_samples "$LATENCY_SAMPLES" --arg engine "$ENGINE_NAME" '
+	jq -cn --argjson ok "$1" --argjson running "$2" --arg timestamp "$(timestamp)" --arg phase "$PROGRESS_PHASE" --arg download "$3" --arg upload "$4" --arg ping "$5" --arg jitter "$6" --argjson probe_count "${7:-0}" --arg server "$8" --arg error "$9" --arg protocol "$ACTUAL_PROTOCOL" --argjson fallback "$HTTPS_FALLBACK" --arg requested "$TRANSFER_PROTOCOL" --arg version "$(cat "$VERSION_FILE" 2>/dev/null || printf 1.0.2)" --arg public_ip "$(cat "$PUBLIC_IP_FILE" 2>/dev/null)" --arg started_at "$RUN_STARTED" --argjson phase_started "${PHASE_STARTED:-0}" --argjson phase_duration "$PHASE_DURATION" --argjson current_mbps "$CURRENT_RATE" --argjson cpu_peak "$CPU_PEAK" --argjson mem_min "$MEM_MIN" --arg quality "$QUALITY" --arg upload_streams "${EFFECTIVE_UPLOAD_STREAMS:-$UPLOAD_STREAMS}" --arg streams "${EFFECTIVE_STREAMS:-$STREAMS}" --argjson download_time "$DOWNLOAD_TIME" --argjson upload_time "$UPLOAD_TIME" --argjson upload_enabled "$UPLOAD_ENABLED" --argjson latency_samples "$LATENCY_SAMPLES" --arg engine "$ENGINE_NAME" --arg download_peak "$DOWNLOAD_PEAK" --arg upload_peak "$UPLOAD_PEAK" '
 		def n($x): if $x == "" or $x == "null" then null else (try ($x|tonumber) catch null) end;
-		{ok:$ok,running:$running,timestamp:$timestamp,phase:(if $phase=="" then null else $phase end),download_mbps:n($download),upload_mbps:n($upload),ping_ms:n($ping),jitter_ms:n($jitter),started_at:$started_at,phase_started:$phase_started,phase_duration:$phase_duration,current_mbps:$current_mbps,cpu_peak:$cpu_peak,mem_available_min_kb:$mem_min,quality:$quality,streams:n($streams),upload_streams:n($upload_streams),download_time:$download_time,upload_time:$upload_time,upload_enabled:$upload_enabled,latency_samples:$latency_samples,probe_count:$probe_count,public_ip:(if $public_ip=="" then null else $public_ip end),server:(if $server=="" or $server=="null" then null else $server end),error:(if $error=="" or $error=="null" then null else $error end),transfer_protocol:$protocol,requested_transfer_protocol:$requested,https_fallback:($fallback==1),engine:(if $engine=="" then null else $engine end),version:$version}'
+		{ok:$ok,running:$running,timestamp:$timestamp,phase:(if $phase=="" then null else $phase end),download_mbps:n($download),upload_mbps:n($upload),download_peak_mbps:n($download_peak),upload_peak_mbps:n($upload_peak),ping_ms:n($ping),jitter_ms:n($jitter),started_at:$started_at,phase_started:$phase_started,phase_duration:$phase_duration,current_mbps:$current_mbps,cpu_peak:$cpu_peak,mem_available_min_kb:$mem_min,quality:$quality,streams:n($streams),upload_streams:n($upload_streams),download_time:$download_time,upload_time:$upload_time,upload_enabled:$upload_enabled,latency_samples:$latency_samples,probe_count:$probe_count,public_ip:(if $public_ip=="" then null else $public_ip end),server:(if $server=="" or $server=="null" then null else $server end),error:(if $error=="" or $error=="null" then null else $error end),transfer_protocol:$protocol,requested_transfer_protocol:$requested,https_fallback:($fallback==1),engine:(if $engine=="" then null else $engine end),version:$version}'
 }
 history_append() {
 	ensure_history_dir || return 1
-	record="$(printf '%s\n' "$1" | jq -c --arg id "$(date +%s)-$$" '{id:$id,timestamp,download_mbps,upload_mbps,ping_ms,jitter_ms,streams,upload_streams,server,transfer_protocol,engine,version,quality,cpu_peak,mem_available_min_kb}')" || return 1
+	record="$(printf '%s\n' "$1" | jq -c --arg id "$(date +%s)-$$" '{id:$id,timestamp,download_mbps,upload_mbps,download_peak_mbps,upload_peak_mbps,ping_ms,jitter_ms,streams,upload_streams,server,transfer_protocol,engine,version,quality,cpu_peak,mem_available_min_kb}')" || return 1
 	printf '%s\n' "$record" >> "$HISTORY_FILE" || return 1
 	chmod 600 "$HISTORY_FILE" 2>/dev/null || true
 	lines="$(wc -l < "$HISTORY_FILE" | tr -d ' ')"
@@ -195,6 +195,7 @@ cancel_run() {
     finish_state false 'Test cancelled' >/dev/null
     exit 130
 }
+phase_pause() { write_state; sleep 0.5 2>/dev/null || sleep 1; }
 measure_latency() {
     local out="$1" url i pid
     url="$(latency_urls | sed -n 1p)"; [ -n "$url" ] || return 1
@@ -212,6 +213,7 @@ measure_latency() {
     [ "$(wc -l < "$out.valid")" -eq "$LATENCY_SAMPLES" ] || return 1
     set -- $(latency_stats "$out.valid"); PING_VALUE="$1"; JITTER_VALUE="$2"
 }
+peak_rate() { awk -v p="$1" -v c="$2" 'BEGIN{ok=(c ~ /^[0-9]+([.][0-9]+)?$/); if(p !~ /^[0-9]+([.][0-9]+)?$/){if(ok)printf "%.2f",c;else print "null";exit} printf "%.2f",(ok&&c+0>p+0)?c:p}'; }
 measure_bandwidth() {
     local kind="$1" duration="$2" streams="$3" sample="$tmpdir/$1.sample" pid result rate
     PROGRESS_PHASE="$kind"; PHASE_STARTED="$(date +%s)"; PHASE_DURATION=$((duration+1)); CURRENT_RATE=null
@@ -222,7 +224,7 @@ measure_bandwidth() {
         if [ -s "$sample" ]; then
             CURRENT_RATE="$(jq -r '.current_mbps' "$sample")"
             rate="$(jq -r '.average_mbps' "$sample")"
-            if [ "$kind" = download ]; then DOWNLOAD_VALUE="$rate"; else UPLOAD_VALUE="$rate"; fi
+            if [ "$kind" = download ]; then DOWNLOAD_VALUE="$rate"; DOWNLOAD_PEAK="$(peak_rate "$DOWNLOAD_PEAK" "$CURRENT_RATE")"; else UPLOAD_VALUE="$rate"; UPLOAD_PEAK="$(peak_rate "$UPLOAD_PEAK" "$CURRENT_RATE")"; fi
         fi
         write_state
     done
@@ -231,7 +233,8 @@ measure_bandwidth() {
     rate="$(cat "$tmpdir/$kind.final")"
     case "$rate" in ''|*[!0-9.]*) return 1;; esac
     awk -v rate="$rate" 'BEGIN{exit !(rate ~ /^[0-9]+([.][0-9]+)?$/ && rate>0)}' || return 1
-    if [ "$kind" = download ]; then DOWNLOAD_VALUE="$rate"; else UPLOAD_VALUE="$rate"; fi
+    # The peak is the fastest one-second sample; it can never be below the phase average.
+    if [ "$kind" = download ]; then DOWNLOAD_VALUE="$rate"; DOWNLOAD_PEAK="$(peak_rate "$DOWNLOAD_PEAK" "$rate")"; else UPLOAD_VALUE="$rate"; UPLOAD_PEAK="$(peak_rate "$UPLOAD_PEAK" "$rate")"; fi
     CURRENT_RATE=null
 }
 run_test() {
@@ -255,10 +258,16 @@ run_test() {
     while IFS="$(printf '\t')" read -r url stats; do printf '%s\t%s\n' "$(selected_url "$url")" "$(selected_url "$stats")"; done < "$tmpdir/upload.urls" > "$tmpdir/upload.selected"
     select_engine; choose_streams
     [ "$ENGINE_NAME" = native ] || [ -x "$ENGINE" ] || { PROGRESS_PHASE=error; finish_state false 'Transfer engine is missing'; return 1; }
-    if ! measure_latency "$tmpdir/latency"; then PROGRESS_PHASE=error; QUALITY=failed; finish_state false 'Unable to measure latency'; return 1; fi
+    # Order: download, upload, then latency. Each phase result is published and followed by
+    # a half-second pause, so the phases read as separate runs and queues drain before the ping.
     if ! measure_bandwidth download "$DOWNLOAD_TIME" "$EFFECTIVE_STREAMS"; then PROGRESS_PHASE=error; QUALITY=partial; finish_state false 'Download failed; result is incomplete'; return 1; fi
     choose_streams upload
-    if [ "$UPLOAD_ENABLED" = 1 ] && ! measure_bandwidth upload "$UPLOAD_TIME" "$EFFECTIVE_UPLOAD_STREAMS"; then PROGRESS_PHASE=error; QUALITY=partial; finish_state false 'Upload failed; result is incomplete'; return 1; fi
+    phase_pause
+    if [ "$UPLOAD_ENABLED" = 1 ]; then
+        if ! measure_bandwidth upload "$UPLOAD_TIME" "$EFFECTIVE_UPLOAD_STREAMS"; then PROGRESS_PHASE=error; QUALITY=partial; finish_state false 'Upload failed; result is incomplete'; return 1; fi
+        phase_pause
+    fi
+    if ! measure_latency "$tmpdir/latency"; then PROGRESS_PHASE=error; QUALITY=partial; finish_state false 'Unable to measure latency'; return 1; fi
     QUALITY=complete
     if [ "$CPU_PEAK" -ge 90 ] || { [ "$MEM_MIN" -gt 0 ] && [ "$MEM_MIN" -lt 16384 ]; }; then QUALITY=resource_limited; fi
     PROGRESS_PHASE=complete; finish_state true null

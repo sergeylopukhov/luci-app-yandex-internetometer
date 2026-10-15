@@ -17,6 +17,10 @@ QUALITY=partial
 finish_state false 'Upload failed; result is incomplete' > "$TEST_ROOT/failure"
 jq -e '.ok == false and .running == false and .download_mbps == 100 and .upload_mbps == null and .quality == "partial" and .error != null' "$TEST_ROOT/failure" >/dev/null
 [ ! -e "$HISTORY_FILE" ]
+jq -e '.download_peak_mbps == null and .upload_peak_mbps == null' "$TEST_ROOT/failure" >/dev/null
+[ "$(peak_rate null 412.5)" = 412.50 ] && [ "$(peak_rate 412.5 380)" = 412.50 ] && [ "$(peak_rate 412.5 null)" = 412.50 ]
+DOWNLOAD_PEAK=412.50 finish_state false 'Upload failed; result is incomplete' > "$TEST_ROOT/peak"
+jq -e '.download_peak_mbps == 412.5' "$TEST_ROOT/peak" >/dev/null
 write_state
 status_test > "$TEST_ROOT/interrupted"
 jq -e '.running == false and .ok == false and .phase == "error"' "$TEST_ROOT/interrupted" >/dev/null

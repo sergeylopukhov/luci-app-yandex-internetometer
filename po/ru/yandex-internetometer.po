@@ -137,3 +137,15 @@ msgstr "Яндекс Интернетометр"
 
 msgid "ms"
 msgstr "мс"
+
+msgid "Show decimals"
+msgstr "Дробные значения"
+
+msgid "Speed and latency with two decimal places, as in the original Internetometer. Turn off to show whole numbers."
+msgstr "Скорость и задержка с двумя знаками после точки, как в оригинальном Интернетометре. Выключите, чтобы показывать целые числа."
+
+msgid "Peak speed"
+msgstr "Пиковая скорость"
+
+msgid "peak"
+msgstr "пик"

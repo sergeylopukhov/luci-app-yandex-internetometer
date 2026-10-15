@@ -40,7 +40,7 @@ case "$(get download_time)" in ''|15) set_opt download_time 10 || exit 1;; esac
 case "$(get upload_time)" in ''|25) set_opt upload_time 10 || exit 1;; esac
 [ -n "$(get upload_size)" ] || set_opt upload_size 8000000 || exit 1
 [ -n "$(get upload_enabled)" ] || set_opt upload_enabled 1 || exit 1
-[ -n "$(get latency_samples)" ] || set_opt latency_samples 60 || exit 1
+[ -n "$(get latency_samples)" ] || set_opt latency_samples 30 || exit 1
 [ -n "$(get debug)" ] || set_opt debug 0 || exit 1
 uci -q commit "$CONFIG" || exit 1
 

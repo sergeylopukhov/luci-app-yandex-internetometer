@@ -140,3 +140,15 @@ msgstr ""
 
 msgid "ms"
 msgstr ""
+
+msgid "Show decimals"
+msgstr ""
+
+msgid "Speed and latency with two decimal places, as in the original Internetometer. Turn off to show whole numbers."
+msgstr ""
+
+msgid "Peak speed"
+msgstr ""
+
+msgid "peak"
+msgstr ""
