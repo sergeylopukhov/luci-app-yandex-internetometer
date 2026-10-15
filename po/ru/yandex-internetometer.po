@@ -147,5 +147,8 @@ msgstr "Скорость и задержка с двумя знаками пос
 msgid "Peak speed"
 msgstr "Пиковая скорость"
 
-msgid "peak"
-msgstr "пик"
+msgid "max"
+msgstr "макс."
+
+msgid "Hide until the next version"
+msgstr "Скрыть до следующей версии"

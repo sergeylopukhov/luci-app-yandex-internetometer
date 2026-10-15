@@ -9,15 +9,15 @@ on:
       release_tag:
         description: Existing immutable tag to publish
         required: true
-        default: v2.1.0
+        default: v2.1.1
 
 permissions:
   contents: write
 
 env:
   PKG_NAME: luci-app-yandex-internetometer
-  PROJECT_VERSION: 2.1.0
-  PKG_VERSION: 2.1.0-r1
+  PROJECT_VERSION: 2.1.1
+  PKG_VERSION: 2.1.1-r1
 
 jobs:
   build:

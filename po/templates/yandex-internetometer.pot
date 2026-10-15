@@ -150,5 +150,8 @@ msgstr ""
 msgid "Peak speed"
 msgstr ""
 
-msgid "peak"
+msgid "max"
+msgstr ""
+
+msgid "Hide until the next version"
 msgstr ""

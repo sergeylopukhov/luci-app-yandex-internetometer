@@ -27,6 +27,7 @@ var showDecimals = true;
 var progressPhase = null;
 var languageStorageKey = 'yandexInternetometerLanguage';
 var themeStorageKey = 'yandexInternetometerTheme';
+var dismissedUpdateStorageKey = 'yandexInternetometerDismissedUpdate';
 var updateCommand = 'curl -fsSL https://sergeylopukhov.github.io/luci-app-yandex-internetometer/install.sh | sh -s -- --yes';
 var translations = {
 	ru: {
@@ -38,11 +39,7 @@ var translations = {
 		"Test cancelled": "Измерение остановлено",
 		"Incomplete result": "Неполный результат",
 		"Connection lost. Retrying automatically.": "Связь с роутером потеряна. Повторяем запрос.",
-		"Live speed; average": "Текущая скорость; средняя",
 		"Completed. Router resources may have limited the speed.": "Завершено. Ресурсы роутера могли ограничить скорость.",
-		"Completed measurement; average speed": "Измерение завершено · средняя скорость",
-		"Automatic mode selects the load for this router.": "Автоматический режим подбирает нагрузку под роутер.",
-		"seconds remaining in this phase": "с до завершения этапа",
 		"Upload disabled": "Отправка отключена",
 		"Automatic mode selects the stream count using available memory, CPU cores and system load.": "Автоматический выбор учитывает доступную память, ядра CPU и нагрузку системы.",
 		"Bytes per upload request. Data is generated in a small buffer without a temporary payload file.": "Байт на запрос. Данные создаются в небольшом буфере, без временного файла.",
@@ -58,7 +55,7 @@ var translations = {
 		'Current stage: %s': 'Текущий этап: %s',
 		'Diagnostic log': 'Журнал диагностики',
 		'Peak speed': 'Пиковая скорость',
-		'peak': 'пик',
+		'max': 'макс.',
 		'Show decimals': 'Дробные значения',
 		'Speed and latency with two decimal places, as in the original Internetometer. Turn off to show whole numbers.': 'Скорость и задержка с двумя знаками после точки, как в оригинальном Интернетометре. Выключите, чтобы показывать целые числа.',
 		'Writes additional troubleshooting messages to /var/run/yandex-internetometer/debug.log. Enable it only while diagnosing a problem; the log is removed after reboot.': 'Записывает дополнительные сведения в /var/run/yandex-internetometer/debug.log. Включайте только для поиска неполадок: после перезагрузки журнал удаляется.',
@@ -145,6 +142,7 @@ var translations = {
 		'Checking for updates': 'Проверяем обновление…',
 		'No updates available': 'Установлена актуальная версия',
 		'Copy command': 'Скопировать команду',
+		'Hide until the next version': 'Скрыть до следующей версии',
 		'Command copied': 'Команда скопирована',
 		'Update command': 'Команда обновления',
 		'Unable to check updates. Check the connection and try again.': 'Не удалось проверить обновление. Проверьте подключение и попробуйте снова.',
@@ -187,6 +185,22 @@ function readStoredTheme() {
 function storeTheme(theme) {
 	try {
 		window.localStorage.setItem(themeStorageKey, theme);
+	}
+	catch (e) {}
+}
+
+function readDismissedUpdate() {
+	try {
+		return window.localStorage.getItem(dismissedUpdateStorageKey);
+	}
+	catch (e) {}
+
+	return null;
+}
+
+function storeDismissedUpdate(version) {
+	try {
+		window.localStorage.setItem(dismissedUpdateStorageKey, version);
 	}
 	catch (e) {}
 }
@@ -651,13 +665,13 @@ function renderHistory() {
 	]));
 }
 
-// Average speed with the peak of that run underneath; records saved before peaks existed show only the average.
+// Average speed with the peak of that run on the same line; records saved before peaks existed show only the average.
 function historySpeedCell(average, peak) {
 	if (historyNumber(average) === null)
 		return E('td', {}, '—');
-	return E('td', {}, [
+	return E('td', { 'class': 'yandex-internetometer-history-speed' }, [
 		metricNumber(average),
-		historyNumber(peak) === null ? '' : E('small', { 'class': 'yandex-internetometer-history-peak' }, T('peak') + ' ' + metricNumber(peak))
+		historyNumber(peak) === null ? '' : E('small', { 'class': 'yandex-internetometer-history-peak' }, ' (' + T('max') + ' ' + metricNumber(peak) + ')')
 	]);
 }
 
@@ -878,9 +892,9 @@ var stageOrder = ['download', 'upload', 'ping', 'complete'];
 
 function stagePill(id, label, phase) {
 	var className = 'yandex-internetometer-stage-pill';
-	if (phase === id)
+	if (phase === id && id !== 'complete')
 		className += ' is-active';
-	else if (stageOrder.indexOf(phase) > stageOrder.indexOf(id))
+	else if (stageOrder.indexOf(phase) >= stageOrder.indexOf(id))
 		className += ' is-done';
 
 	return E('div', { 'class': className }, [
@@ -947,6 +961,9 @@ function renderUpdateNotice() {
 			E('span', {}, T('Installed version %s').format(updateData.installed_version || ''))
 		]) : null;
 	release = updateData.release || {};
+	// A hidden notice stays hidden until a newer release appears or the user checks by hand.
+	if (!updateData.manualCheck && release.version && readDismissedUpdate() === release.version)
+		return null;
 	return E('div', { 'class': 'alert-message notice yandex-internetometer-update' }, [
 		E('strong', {}, '%s %s'.format(T('Update available'), release.version || '')),
 		E('span', {}, T('Installed version %s').format(updateData.installed_version || '')),
@@ -957,7 +974,18 @@ function renderUpdateNotice() {
 				E('code', {}, updateCommand),
 				E('button', { 'type': 'button', 'class': 'btn cbi-button', 'click': function(ev) { return copyUpdateCommand(ev.currentTarget); } }, T('Copy command'))
 			])
-		])
+		]),
+		E('button', {
+			'type': 'button',
+			'class': 'yandex-internetometer-update-dismiss',
+			'title': T('Hide until the next version'),
+			'aria-label': T('Hide until the next version'),
+			'click': function() {
+				storeDismissedUpdate(release.version || '');
+				updateData.manualCheck = false;
+				replaceUpdateNotice();
+			}
+		}, '×')
 	]);
 }
 
@@ -1023,15 +1051,17 @@ function speedMetric(className, label, icon, value, unit, active) {
 	]);
 }
 
-function renderSessionRow(data, phaseText) {
+// The IP keeps the centre column and the button its own slot, so neither moves when
+// the button changes or disappears; the phase itself is shown in the header line.
+function renderSessionRow(data) {
 	var children = [
+		E('span', { 'class': 'yandex-internetometer-session-slot' }),
 		E('span', { 'class': 'yandex-internetometer-router-ip', 'title': T('Router IP') }, [
 			E('strong', { 'aria-label': T('Router IP') }, hasValue(data.public_ip) ? data.public_ip : '--')
 		])
 	];
 
 	if (data && data.running) {
-		children.push(E('span', { 'class': 'yandex-internetometer-session-phase' }, phaseText));
 		children.push(E('button', {
 			'type': 'button',
 			'class': 'yandex-internetometer-inline-stop',
@@ -1050,6 +1080,8 @@ function renderSessionRow(data, phaseText) {
 			'click': startTest
 		}, T('Run again')));
 	}
+	else
+		children.push(E('span', { 'class': 'yandex-internetometer-session-slot' }));
 
 	return E('div', { 'class': 'yandex-internetometer-session-row' }, children);
 }
@@ -1091,23 +1123,19 @@ function startTest() {
 	}).finally(function() { commandPending = false; });
 }
 
+// Only states the dial and the stage pills cannot show get a line here; its height is reserved,
+// so the line appearing never shifts the page.
 function qualityText(data) {
     if (data.connection_error) return T('Connection lost. Retrying automatically.');
-    if (data.running) return T('Live speed; average') + ': ' + emptyValue(activePhase(data) === 'upload' ? data.upload_mbps : data.download_mbps, T('Mbps'));
+    if (data.running) return '';
     if (data.quality === 'resource_limited') return T('Completed. Router resources may have limited the speed.');
     if (data.phase === 'cancelled') return T('Test cancelled');
     if (data.quality === 'partial' || data.error) return T('Incomplete result');
-    return hasVisibleResult(data) ? T('Completed measurement; average speed') : T('Automatic mode selects the load for this router.');
-}
-function phaseRemaining(data) {
-    if (!data.running || !data.phase_duration || !data.phase_started) return null;
-    return Math.max(0, Math.ceil(data.phase_duration - (Date.now()/1000 - data.phase_started)));
+    return '';
 }
 function renderRunProgress(data) {
-    var remaining = phaseRemaining(data);
     return E('div', { 'class': 'yandex-internetometer-run-progress', 'aria-live': 'polite' }, [
-        renderStagePills(data),
-        E('span', { 'class': 'yandex-internetometer-remaining' }, remaining === null ? '' : remaining + ' ' + T('seconds remaining in this phase'))
+        renderStagePills(data)
     ]);
 }
 
@@ -1141,7 +1169,7 @@ function renderHero(data) {
 				speedMetric('is-ping', T('Latency'), '', hasValue(data.ping_ms) ? pingNumber(data.ping_ms) : '--', T('ms'), phase === 'ping')
 			])
 		]),
-		renderSessionRow(data, phaseText),
+		renderSessionRow(data),
         renderRunProgress(data),
         E('p', { 'class': 'yandex-internetometer-quality', role: 'status' }, qualityText(data)),
 		E('details', { 'class': 'yandex-internetometer-detail-section' }, [E('summary', {}, T('Details')), E('div', { 'class': 'yandex-internetometer-details' }, [
@@ -1247,13 +1275,7 @@ function updateStatusInPlace(data) {
     if (qualityNode) qualityNode.textContent = qualityText(data);
     var stages = statusBox.querySelector('.yandex-internetometer-stages');
     if (stages && stages.dataset.phase !== phase) { stages.replaceWith(renderStagePills(data)); }
-    var remainingNode = statusBox.querySelector('.yandex-internetometer-remaining'), remaining = phaseRemaining(data);
-    if (remainingNode) remainingNode.textContent = remaining === null ? '' : remaining + ' ' + T('seconds remaining in this phase');
 	phaseTextNode = statusBox.querySelector('.yandex-internetometer-phase-text');
-	if (phaseTextNode)
-		phaseTextNode.textContent = data && data.running ? runningPhase(data, runningElapsed(data)) : gaugeStateText(data);
-
-	phaseTextNode = statusBox.querySelector('.yandex-internetometer-session-phase');
 	if (phaseTextNode)
 		phaseTextNode.textContent = data && data.running ? runningPhase(data, runningElapsed(data)) : gaugeStateText(data);
 
@@ -1467,10 +1489,9 @@ return view.extend({
 					'.yandex-internetometer-speed-value{font-size:46px;font-size:clamp(22px,5cqi,46px);line-height:1;white-space:nowrap;font-weight:400;color:var(--yi-text);font-variant-numeric:tabular-nums;letter-spacing:0;margin:8px 0;transition:opacity .2s cubic-bezier(.22,1,.36,1)}',
 					'.yandex-internetometer-hero.is-running .yandex-internetometer-speed-value{color:var(--yi-red)}',
 					'.yandex-internetometer-speed-unit{font-size:17px;line-height:1.2;font-weight:500;color:var(--yi-text)}',
-					'.yandex-internetometer-session-row{display:flex;align-items:center;justify-content:center;gap:16px;min-height:36px;color:var(--yi-text);font-size:16px;line-height:1.2;flex-wrap:wrap}',
+					'.yandex-internetometer-session-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;width:100%;min-height:44px;color:var(--yi-text);font-size:16px;line-height:1.2}.yandex-internetometer-session-row>:last-child{justify-self:start}',
 					'.yandex-internetometer-router-ip{display:flex;align-items:center;gap:8px;color:var(--yi-muted)}',
 					'.yandex-internetometer-router-ip strong{color:var(--yi-text);font-weight:500;font-variant-numeric:tabular-nums}',
-					'.yandex-internetometer-session-phase{color:var(--yi-muted)}',
 					'.yandex-internetometer-inline-stop{border:0;background:transparent;color:var(--yi-text);font-size:24px;line-height:1;cursor:pointer;padding:0 4px}',
 					'.yandex-internetometer-run-again{border:0;border-radius:10px;background:#fcdb32;color:#242424;font-weight:700;min-height:36px;padding:8px 16px;cursor:pointer}',
 					'.yandex-internetometer-stages{width:min(720px,100%);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}',
@@ -1486,8 +1507,8 @@ return view.extend({
 					'.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:0}',
 					'.yandex-internetometer-detail-row span{font-size:12px;color:var(--yi-muted);white-space:nowrap}',
 					'.yandex-internetometer-detail-row strong{font-size:13px;color:var(--yi-text);font-weight:600;text-align:right;overflow-wrap:anywhere;min-width:0}',
-					'.yandex-internetometer-update{display:flex;flex-wrap:wrap;align-items:center;gap:9px 12px;min-width:0;max-width:100%;box-sizing:border-box;margin:0 0 14px;padding:12px 14px;border:1px solid #f1b4a8;border-radius:10px;background:#fff4f0;color:#38251f;font-size:14px;line-height:1.4}',
-					'.yandex-internetometer-update strong{color:#9d2e1e}',
+					'.yandex-internetometer-update{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:9px 12px;min-width:0;max-width:100%;box-sizing:border-box;margin:0 0 14px;padding:12px 44px 12px 14px;border:1px solid #f1b4a8;border-radius:10px;background:#fff4f0;color:#38251f;font-size:14px;line-height:1.4}',
+					'.yandex-internetometer-update strong{color:#9d2e1e}.yandex-internetometer-update-dismiss{position:absolute;top:6px;right:6px;width:32px;height:32px;border:0;border-radius:7px;background:transparent;color:inherit;font-size:22px;line-height:1;cursor:pointer;opacity:.7}.yandex-internetometer-update-dismiss:hover{opacity:1;background:rgba(0,0,0,.06)}',
 					'.yandex-internetometer-update a{color:#9d2e1e;font-weight:700}',
 					'.yandex-internetometer-update-command{flex:1 1 100%;min-width:0;max-width:100%;display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin-top:2px;color:#514841;font-size:12px}',
 					'.yandex-internetometer-update-command-row{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;min-width:0}.yandex-internetometer-update-command code{display:block;flex:1 1 16rem;min-width:0;max-width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #e3cfc9;border-radius:7px;background:#fff;color:#252528;font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;white-space:nowrap}.yandex-internetometer-update-command-row .btn{flex:0 0 auto;max-width:100%;white-space:normal;border:1px solid #d59e92;border-radius:7px;background:#fff;color:#762b20;font-weight:700;cursor:pointer}.yandex-internetometer-update.is-current{border-color:#a9d8c0;background:#f1fbf5;color:#214d35}.yandex-internetometer-update.is-current strong{color:#167548}',
@@ -1507,7 +1528,7 @@ return view.extend({
 					'.yandex-internetometer-chart-overlay{cursor:crosshair}.yandex-internetometer-chart-overlay:hover~.yandex-internetometer-chart-point{opacity:.9}',
 					'.yandex-internetometer-chart-legend{display:flex;justify-content:center;gap:22px;font-size:12px;margin-top:8px}.yandex-internetometer-chart-legend span{display:inline-flex;align-items:center;gap:6px}.yandex-internetometer-chart-legend span:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor}.yandex-internetometer-chart-legend .is-download{color:var(--yi-red)}.yandex-internetometer-chart-legend .is-upload{color:var(--yi-green)}.yandex-internetometer-chart-legend{flex-wrap:wrap;row-gap:6px}.yandex-internetometer-chart-legend .is-average,.yandex-internetometer-chart-legend .is-peak{color:var(--yi-muted)}.yandex-internetometer-chart-legend .is-average:before,.yandex-internetometer-chart-legend .is-peak:before{display:none}',
 					'.yandex-internetometer-history-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.yandex-internetometer-history-metric{display:grid;gap:5px;padding:13px;border-radius:9px;background:var(--yi-panel)}.yandex-internetometer-history-metric span,.yandex-internetometer-history-metric small{color:var(--yi-muted);font-size:12px}.yandex-internetometer-history-metric strong{font-size:20px;font-variant-numeric:tabular-nums}',
-					'.yandex-internetometer-history-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.yandex-internetometer-history-actions .btn{min-height:36px;padding:7px 12px;border:1px solid var(--yi-border);border-radius:8px;background:var(--yi-panel);color:var(--yi-text);cursor:pointer}.yandex-internetometer-history-table-wrap{overflow-x:auto}.yandex-internetometer-history-table{width:100%;font-variant-numeric:tabular-nums}.yandex-internetometer-history-table th,.yandex-internetometer-history-table td{color:var(--yi-text)!important;background:transparent!important}.yandex-internetometer-history-table thead th{color:var(--yi-muted)!important}.yandex-internetometer-history-empty{margin:0;color:var(--yi-muted)}.yandex-internetometer-history-peak{display:block;margin-top:2px;font-size:12px;color:var(--yi-muted)}',
+					'.yandex-internetometer-history-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.yandex-internetometer-history-actions .btn{min-height:36px;padding:7px 12px;border:1px solid var(--yi-border);border-radius:8px;background:var(--yi-panel);color:var(--yi-text);cursor:pointer}.yandex-internetometer-history-table-wrap{overflow-x:auto}.yandex-internetometer-history-table{width:100%;font-variant-numeric:tabular-nums}.yandex-internetometer-history-table th,.yandex-internetometer-history-table td{color:var(--yi-text)!important;background:transparent!important}.yandex-internetometer-history-table thead th{color:var(--yi-muted)!important}.yandex-internetometer-history-empty{margin:0;color:var(--yi-muted)}.yandex-internetometer-history-speed{white-space:nowrap}.yandex-internetometer-history-peak{font-size:12px;color:var(--yi-muted)}',
 					'.yandex-internetometer-settings{margin-top:20px;background:var(--yi-bg);color:var(--yi-text);border:1px solid var(--yi-border);border-radius:12px;overflow:hidden}',
 					'.yandex-internetometer-settings>summary{cursor:pointer;padding:14px 18px;border-bottom:1px solid var(--yi-border);color:var(--yi-text);font-size:16px;font-weight:700;line-height:1.3;list-style-position:inside}',
 					'.yandex-internetometer-settings:not([open])>summary{border-bottom:0}',
@@ -1530,7 +1551,7 @@ return view.extend({
 					'.yandex-internetometer-theme-dark .yandex-internetometer-detail-row strong{color:#f5f7fa}',
 					'@media (max-width:900px){.yandex-internetometer-speed-label{font-size:17px}.yandex-internetometer-speed-value{font-size:40px;font-size:clamp(22px,5cqi,40px)}.yandex-internetometer-speed-unit{font-size:17px}.yandex-internetometer-svg-label{font-size:22px}.yandex-internetometer-svg-tick{stroke-width:3}.yandex-internetometer-svg-tick.is-major{stroke-width:3.4}}',
 					'@media (max-width:680px){.yandex-internetometer-hero{padding:16px 4px}.yandex-internetometer-brandline{align-items:flex-start;flex-direction:column;gap:6px}.yandex-internetometer-brandline span{text-align:left}.yandex-internetometer-oval{aspect-ratio:1.28/1;overflow:hidden}.yandex-internetometer-speedometer-svg{width:190%;height:100%;left:-45%;right:auto}.yandex-internetometer-speed-metric{top:auto;width:213px;transform:translateX(-50%)}.yandex-internetometer-speed-metric.is-download{left:50%;top:24%}.yandex-internetometer-speed-metric.is-upload{left:50%;top:48%}.yandex-internetometer-speed-metric.is-ping{left:50%;top:72%}.yandex-internetometer-speed-metric.is-active{transform:translateX(-50%)}.yandex-internetometer-speed-label{font-size:15px}.yandex-internetometer-speed-value{font-size:32px;margin:4px 0}.yandex-internetometer-speed-unit{font-size:15px}.yandex-internetometer-svg-label{display:none}.yandex-internetometer-stages,.yandex-internetometer-details{grid-template-columns:1fr}.yandex-internetometer-detail-row:nth-last-child(-n+2){border-bottom:1px solid var(--yi-border)}.yandex-internetometer-detail-row:last-child{border-bottom:0}.yandex-internetometer-detail-row span{white-space:normal}.yandex-internetometer-history{padding:14px}.yandex-internetometer-history-head{align-items:stretch;flex-direction:column}.yandex-internetometer-history-metrics{grid-template-columns:1fr}.yandex-internetometer-chart svg{height:200px}.yandex-internetometer-settings{margin-top:16px}.yandex-internetometer-settings>summary{padding:13px 14px}.yandex-internetometer-settings>*:not(summary){padding:0 14px 4px}.yandex-internetometer-settings .cbi-value{grid-template-columns:1fr;gap:7px;padding:16px 0}.yandex-internetometer-settings .cbi-value-title{padding:0 0 0 14px}.yandex-internetometer-settings .cbi-value-description{grid-column:1}.yandex-internetometer-update{align-items:flex-start}.yandex-internetometer-update-command code{font-size:11px;flex-basis:100%}.yandex-internetometer-update-command-row .btn{flex:1 1 auto;min-height:38px}}',
-					'.yandex-internetometer-oval{max-width:800px;aspect-ratio:957/340}.yandex-internetometer-speedometer-reference{opacity:.3}.yandex-internetometer-svg-tick{transition:opacity .2s ease-out}.yandex-internetometer-speed-value{min-height:1em}.yandex-internetometer-detail-section{width:min(720px,100%)}.yandex-internetometer-detail-section summary{cursor:pointer;padding:12px 0;font-weight:600}.yandex-internetometer-run-progress{display:grid;gap:10px;width:min(720px,100%);text-align:center}.yandex-internetometer-stages{width:100%}.yandex-internetometer-quality{margin:0;color:var(--yi-muted);text-align:center}.yandex-internetometer-inline-stop{font-size:14px;min-height:44px;padding:8px 14px;border:1px solid var(--yi-border);border-radius:8px}.yandex-internetometer-topbar{flex-wrap:wrap}.yandex-internetometer-language,.yandex-internetometer-history-actions .btn,.yandex-internetometer-run-again{min-height:44px;background:var(--yi-panel)}.yandex-internetometer-run-again{background:#fcdb32}.yandex-internetometer-page button:focus-visible,.yandex-internetometer-page summary:focus-visible{outline:2px solid var(--yi-red);outline-offset:3px}.yandex-internetometer-page button:disabled{opacity:.5;cursor:wait}.yandex-internetometer-page .yandex-internetometer-speed-metric{transition:opacity .2s ease-out;transform:translate(-50%,-50%)}@media(prefers-reduced-motion:reduce){.yandex-internetometer-page .yandex-internetometer-speed-metric,.yandex-internetometer-page .yandex-internetometer-stage-pill{transition:none}}@media(max-width:680px){.yandex-internetometer-page .yandex-internetometer-oval{aspect-ratio:auto;min-height:320px;padding:20px 0;box-sizing:border-box}.yandex-internetometer-page .is-ready .yandex-internetometer-oval{min-height:150px}.yandex-internetometer-page .yandex-internetometer-speedometer-svg{display:none}.yandex-internetometer-page .yandex-internetometer-speed-grid{display:grid;gap:24px;width:100%}.yandex-internetometer-page .yandex-internetometer-speed-metric,.yandex-internetometer-page .yandex-internetometer-speed-metric.is-active{position:static;transform:none;width:100%}.yandex-internetometer-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+					'.yandex-internetometer-speedometer-reference{opacity:1;transition:opacity .3s ease-out}.yandex-internetometer-speedometer-svg.is-running .yandex-internetometer-speedometer-reference{opacity:.45}.yandex-internetometer-svg-tick{transition:opacity .2s ease-out}.yandex-internetometer-speed-value{min-height:1em}.yandex-internetometer-detail-section{width:min(720px,100%)}.yandex-internetometer-detail-section summary{cursor:pointer;padding:12px 0;font-weight:600}.yandex-internetometer-run-progress{display:grid;gap:10px;width:min(720px,100%);text-align:center}.yandex-internetometer-stages{width:100%}.yandex-internetometer-quality{margin:0;min-height:1.45em;line-height:1.45;color:var(--yi-muted);text-align:center}.yandex-internetometer-inline-stop{font-size:14px;min-height:44px;padding:8px 14px;border:1px solid var(--yi-border);border-radius:8px}.yandex-internetometer-topbar{flex-wrap:wrap}.yandex-internetometer-language,.yandex-internetometer-history-actions .btn,.yandex-internetometer-run-again{min-height:44px;background:var(--yi-panel)}.yandex-internetometer-run-again{background:#fcdb32}.yandex-internetometer-page button:focus-visible,.yandex-internetometer-page summary:focus-visible{outline:2px solid var(--yi-red);outline-offset:3px}.yandex-internetometer-page button:disabled{opacity:.5;cursor:wait}.yandex-internetometer-page .yandex-internetometer-speed-metric{transition:opacity .2s ease-out;transform:translate(-50%,-50%)}@media(prefers-reduced-motion:reduce){.yandex-internetometer-page .yandex-internetometer-speed-metric,.yandex-internetometer-page .yandex-internetometer-stage-pill{transition:none}}@media(max-width:680px){.yandex-internetometer-page .yandex-internetometer-session-row{grid-template-columns:auto auto;justify-content:center}.yandex-internetometer-page .yandex-internetometer-session-row>.yandex-internetometer-session-slot:first-child{display:none}.yandex-internetometer-page .yandex-internetometer-oval{aspect-ratio:auto;min-height:320px;padding:20px 0;box-sizing:border-box}.yandex-internetometer-page .is-ready .yandex-internetometer-oval{min-height:150px}.yandex-internetometer-page .yandex-internetometer-speedometer-svg{display:none}.yandex-internetometer-page .yandex-internetometer-speed-grid{display:grid;gap:24px;width:100%}.yandex-internetometer-page .yandex-internetometer-speed-metric,.yandex-internetometer-page .yandex-internetometer-speed-metric.is-active{position:static;transform:none;width:100%}.yandex-internetometer-stages{grid-template-columns:repeat(2,minmax(0,1fr))}}',
 				].join('')),
 				E('div', { 'class': 'yandex-internetometer-topbar' }, [
 					E('button', {
