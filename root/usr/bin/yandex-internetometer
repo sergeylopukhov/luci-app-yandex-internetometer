@@ -16,7 +16,7 @@ GET_PROBES_URL="https://yandex.ru/internet/api/v0/get-probes"
 REFERER="https://yandex.ru/internet/"; USER_AGENT="Mozilla/5.0 (OpenWrt; Yandex Internetometer)"
 STREAMS=auto; UPLOAD_STREAMS=auto; EFFECTIVE_UPLOAD_STREAMS=""; DOWNLOAD_TIME=10; UPLOAD_TIME=10; UPLOAD_SIZE=8000000
 UPLOAD_ENABLED=1; TRANSFER_PROTOCOL=auto; ACTUAL_PROTOCOL=https; HTTPS_FALLBACK=0; DEBUG=0; JSON_MODE=0; PROGRESS_PHASE=""; LATENCY_SAMPLES=30
-CHILD_PIDS=""; RUN_STARTED=""; PHASE_STARTED=0; PHASE_DURATION=0; CURRENT_RATE=null; DOWNLOAD_PEAK=null; UPLOAD_PEAK=null; CPU_PEAK=0; CPU_CURRENT=0; CPU_TOTAL_CURRENT=0; CPU_TOTAL_PEAK=0; MEM_MIN=0; QUALITY=unknown; STOPPING=0
+CHILD_PIDS=""; RUN_STARTED=""; PHASE_STARTED=0; PHASE_DURATION=0; CURRENT_RATE=null; DOWNLOAD_PEAK=null; UPLOAD_PEAK=null; LATENCY_URL=""; NEAREST_HOST=""; CPU_PEAK=0; CPU_CURRENT=0; CPU_TOTAL_CURRENT=0; CPU_TOTAL_PEAK=0; MEM_MIN=0; QUALITY=unknown; STOPPING=0
 DOWNLOAD_VALUE=null; UPLOAD_VALUE=null; PING_VALUE=null; JITTER_VALUE=null; PROBES_VALUE=0; SERVER_VALUE=null
 
 usage() { printf '%s\n' 'Usage: yandex-internetometer run [--json] [--streams N] [--upload-streams auto|N] [--transfer-protocol auto|http|https] [--download-time N] [--upload-time N] [--upload-size N] [--upload-enabled 0|1] [--latency-samples N]' '       yandex-internetometer start|status|stop|history|history-clear'; }
@@ -122,7 +122,10 @@ select_engine() {
 	debug_log "Transfer engine: $ENGINE_NAME over $ACTUAL_PROTOCOL"
 }
 
-latency_stats() { awk '{v[++n]=$1*1000;s+=v[n]} END{if(!n){print "null null";exit} for(i=1;i<=n;i++){d=v[i]-s/n;if(d<0)d=-d;j+=d}printf "%.2f %.2f",s/n,j/n}' "$1"; }
+# Latency is the median of the samples: right after the upload a single late reply
+# (~250 ms) would otherwise lift a 30-sample mean by several milliseconds.
+# Jitter is the mean absolute deviation from that median.
+latency_stats() { sort -n "$1" | awk '{v[++n]=$1*1000} END{if(!n){print "null null";exit} m=(n%2)?v[(n+1)/2]:(v[n/2]+v[n/2+1])/2; for(i=1;i<=n;i++){d=v[i]-m;if(d<0)d=-d;j+=d}printf "%.2f %.2f",m,j/n}'; }
 sum_files() { awk '{s+=$1} END{printf "%.0f",s+0}' "$@"; }
 mbps() { awk -v b="$1" -v s="$2" 'BEGIN{if(s>0)printf "%.2f",b*8/s/1000000;else print "0.00"}'; }
 elapsed() { awk -v n="$(uptime_seconds)" -v s="$1" 'BEGIN{printf "%.3f",n-s}'; }
@@ -196,10 +199,32 @@ cancel_run() {
     exit 130
 }
 phase_pause() { write_state; sleep 0.5 2>/dev/null || sleep 1; }
+# Yandex lists several servers and the first one is not always the nearest (an external
+# CDN node can be ~30 ms away while the others answer in ~5 ms). Like the web
+# Internetometer, try each latency server briefly and keep the fastest; the first listed
+# is the fallback when none answers.
+nearest_latency_url() {
+    local url best
+    best="$(latency_urls | while IFS= read -r url; do
+        [ -n "$url" ] || continue
+        curl -fsS --connect-timeout 2 --max-time 3 -w '%{time_starttransfer}\n' -o /dev/null "$url" -o /dev/null "$url" -o /dev/null "$url" -o /dev/null "$url" 2>/dev/null |
+            awk -v url="$url" 'NR>1&&$1>0{if(min==""||$1<min)min=$1} END{if(min!="")printf "%s %s\n",min,url}'
+    done | sort -n -k1,1 | sed -n '1s/^[^ ]* //p')"
+    [ -n "$best" ] || best="$(latency_urls | sed -n 1p)"
+    printf '%s\n' "$best"
+}
+url_host() { printf '%s\n' "$1" | sed -n 's#^https\{0,1\}://\([^/]*\).*#\1#p'; }
+# Transfers go to the same nearest server; without probes on that host all of them are kept.
+prefer_host() {
+    local host="$1" file="$2"
+    [ -n "$host" ] && [ -s "$file" ] || return 0
+    grep -F "://$host/" "$file" > "$file.near" 2>/dev/null || true
+    if [ -s "$file.near" ]; then mv "$file.near" "$file"; else rm -f "$file.near"; fi
+}
 measure_latency() {
-    local out="$1" url i pid
-    url="$(latency_urls | sed -n 1p)"; [ -n "$url" ] || return 1
+    local out="$1" url="${LATENCY_URL:-}" i pid
     PROGRESS_PHASE=ping; PHASE_STARTED="$(date +%s)"; PHASE_DURATION=0; write_state
+    [ -n "$url" ] || url="$(nearest_latency_url)"; [ -n "$url" ] || return 1
     set --; i=0
     while [ "$i" -le "$LATENCY_SAMPLES" ]; do set -- "$@" -o /dev/null "$url"; i=$((i+1)); done
     curl -fsS --connect-timeout 2 --max-time 3 --fail-early -w '%{time_starttransfer}\n' "$@" > "$out" 2>>"$LOG_FILE" & pid=$!; CHILD_PIDS="$pid"
@@ -251,6 +276,9 @@ run_test() {
     fetch_probes
     PROBES_VALUE="$(probe_count)"; SERVER_VALUE="$(server_name)"
     transfer_urls download > "$tmpdir/download.urls"; transfer_urls upload > "$tmpdir/upload.urls"
+    LATENCY_URL="$(nearest_latency_url)"; NEAREST_HOST="$(url_host "$LATENCY_URL")"
+    [ -z "$NEAREST_HOST" ] || SERVER_VALUE="$NEAREST_HOST"
+    prefer_host "$NEAREST_HOST" "$tmpdir/download.urls"; prefer_host "$NEAREST_HOST" "$tmpdir/upload.urls"
     [ -s "$tmpdir/download.urls" ] && { [ "$UPLOAD_ENABLED" = 0 ] || [ -s "$tmpdir/upload.urls" ]; } || { PROGRESS_PHASE=error; finish_state false 'No safe transfer probes'; return 1; }
     select_transport "$tmpdir/download.urls" "$tmpdir/upload.urls"
     local url stats

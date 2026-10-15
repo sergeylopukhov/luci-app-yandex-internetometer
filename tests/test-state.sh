@@ -28,6 +28,32 @@ PROGRESS_PHASE=complete; QUALITY=complete; UPLOAD_VALUE=80
 finish_state true null >/dev/null
 history_test | jq -e '.records | length == 1' >/dev/null
 STREAMS=auto; UPLOAD_STREAMS=auto; validate_settings
+# The nearest latency server is used even when Yandex lists a distant one first.
+latency_urls() { printf '%s\n' https://far.cdn.yandex.net/ping https://near.cdn.yandex.net/ping https://down.cdn.yandex.net/ping; }
+curl() {
+    for last; do :; done
+    case "$last" in
+        *far*) printf '0.040\n0.031\n0.032\n0.030\n';;
+        *near*) printf '0.009\n0.005\n0.004\n0.006\n';;
+        *) return 7;;
+    esac
+}
+[ "$(nearest_latency_url)" = https://near.cdn.yandex.net/ping ]
+curl() { return 7; }
+[ "$(nearest_latency_url)" = https://far.cdn.yandex.net/ping ]
+unset -f curl
+# One late reply after the upload must not lift the latency.
+printf '%s\n' 0.0050 0.0040 0.2600 0.0045 0.0055 > "$TEST_ROOT/latency"
+[ "$(latency_stats "$TEST_ROOT/latency")" = '5.00 51.40' ]
+printf '%s\n' 0.004 0.002 0.003 0.001 > "$TEST_ROOT/latency"
+[ "$(latency_stats "$TEST_ROOT/latency" | cut -d' ' -f1)" = 2.50 ]
+: > "$TEST_ROOT/latency"; [ "$(latency_stats "$TEST_ROOT/latency")" = 'null null' ]
+printf '%s\n' https://far.cdn.yandex.net/probes/50mb https://near.cdn.yandex.net/probes/50mb > "$TEST_ROOT/urls"
+prefer_host near.cdn.yandex.net "$TEST_ROOT/urls"
+[ "$(cat "$TEST_ROOT/urls")" = https://near.cdn.yandex.net/probes/50mb ]
+prefer_host other.cdn.yandex.net "$TEST_ROOT/urls"
+[ "$(wc -l < "$TEST_ROOT/urls")" -eq 1 ] && [ ! -e "$TEST_ROOT/urls.near" ]
+[ "$(url_host 'http://near.cdn.yandex.net/ping?x=1')" = near.cdn.yandex.net ]
 # A broken/older engine printing zero must never complete or enter history.
 cat > "$TEST_ROOT/engine" <<'ENGINE'
 #!/bin/sh
@@ -46,6 +72,7 @@ server_name() { printf 'fixture.cdn.yandex.net\n'; }
 transfer_urls() { printf 'https://fixture.cdn.yandex.net/probes/50mb\n'; }
 select_transport() { ACTUAL_PROTOCOL=http; }
 measure_latency() { PING_VALUE=1; JITTER_VALUE=0; }
+nearest_latency_url() { printf 'https://fixture.cdn.yandex.net/ping\n'; }
 (
     QUALITY=unknown; UPLOAD_ENABLED=1
     run_test

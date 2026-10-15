@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-yandex-internetometer
-PKG_VERSION:=2.1.1
+PKG_VERSION:=2.1.11
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=Sergey Lopukhov <sergey.lopukhov@gmail.com>
