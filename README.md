@@ -7,6 +7,7 @@
 ![Internetometer interface](docs/screenshot-v1.0.14.png)
 <p align="center">
   <a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases/latest"><img src="https://img.shields.io/github/v/release/sergeylopukhov/luci-app-yandex-internetometer?label=version" alt="Version"></a>
+  <a href="https://github.com/sergeylopukhov/luci-app-yandex-internetometer/releases"><img src="https://img.shields.io/github/downloads/sergeylopukhov/luci-app-yandex-internetometer/total?label=downloads" alt="Downloads"></a>
   <a href="https://openwrt.org/"><img src="https://img.shields.io/badge/OpenWrt-24.10%2B-blue" alt="OpenWrt"></a>
   <a href="docs/install.sh"><img src="https://img.shields.io/badge/packages-apk%20%2F%20opkg-green" alt="apk / opkg"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/sergeylopukhov/luci-app-yandex-internetometer" alt="License"></a>
